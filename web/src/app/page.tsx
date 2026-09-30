@@ -9,6 +9,7 @@ import {
 import { play, stop } from "@/audio/strudel"
 
 import NotesNode from "@/nodes/NotesNode"; // needs `export default` in NotesNode.tsx
+import InstrumentNode from "@/nodes/InstrumentNode";
 
 
 /* Node Config */
@@ -20,15 +21,14 @@ const initialNodes: Node[] = [
         data: { name: "Melody", text: "c4 e4 [c4,e4,g4] ~" },
     },
     {
-        id: "n2",
-        position: { x: 320, y: 60 },
-        data: { label: "Instrument: Triangle" },
-        sourcePosition: Position.Right,
-        targetPosition: Position.Left,
-    },
+    id: "n2",
+    type: "instrument",
+    position: { x: 420, y: 60 },
+    data: { sound: "sawtooth", muted: false, solo: false },
+},
 ];
 
-const nodeTypes = {notes: NotesNode}; //declared OUTSIDE component
+const nodeTypes = {notes: NotesNode, instrument: InstrumentNode}; //declared OUTSIDE component
 
 /* Placeholder for edges content*/
 const initialEdges: Edge[] = [{ id: "e1", source: "n1", target: "n2" }];

@@ -1,0 +1,130 @@
+/* Instrument node, matching the mockup (dark card, blue accent).
+   Uses globals.css tokens: --tile, --tile-border, --tile-raised, --line, --bg, --text,
+   --muted-on-tile, --instrument, --notes, --font-sans, --font-mono. */
+
+/* ---------- Strip React Flow's wrapper (node type must be "instrument") ---------- */
+.react-flow__node-instrument,
+.react-flow__node-instrument.selected,
+.react-flow__node-instrument:hover {
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---------- Card ---------- */
+.instrument-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 260px;
+  min-height: 72px;
+  padding: 12px 14px;
+  background: var(--tile);
+  border: 1px solid var(--tile-border);
+  border-radius: 14px;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.react-flow__node.selected .instrument-node {
+  border-color: var(--instrument);
+  box-shadow: 0 0 0 3px rgba(143, 168, 255, 0.2);
+}
+
+/* ---------- Icon badge ---------- */
+.instrument-node__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: rgba(143, 168, 255, 0.14);
+  color: var(--instrument);
+  flex-shrink: 0;
+}
+
+/* ---------- Title block ---------- */
+.instrument-node__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.instrument-node__eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--instrument);
+}
+
+/* Sound picker: a native <select> styled to look like a title */
+.instrument-node__sound {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 18px 0 0;
+  border: 0;
+  background: transparent
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 20 20' fill='none' stroke='%239aa3b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 5 5-5'/%3E%3C/svg%3E")
+    no-repeat right center;
+  color: var(--text);
+  font: 600 15px var(--font-sans);
+  cursor: pointer;
+}
+.instrument-node__sound:focus-visible {
+  outline: 2px solid var(--instrument);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.instrument-node__sound option {
+  background: var(--tile);
+  color: var(--text);
+}
+
+/* ---------- Mute / Solo ---------- */
+.instrument-node__actions {
+  display: flex;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.instrument-node__btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 7px;
+  border: 1px solid var(--tile-border);
+  background: var(--tile-raised);
+  color: var(--muted-on-tile);
+  font: 600 11px var(--font-sans);
+  cursor: pointer;
+}
+.instrument-node__btn:hover { color: var(--text); }
+.instrument-node__btn[aria-pressed="true"] {
+  background: var(--instrument);
+  border-color: var(--instrument);
+  color: var(--bg);
+}
+
+/* ---------- Handles ---------- */
+.instrument-node .react-flow__handle {
+  width: 14px;
+  height: 14px;
+}
+/* input (left): hollow ring in the Notes color, since notes plug in here */
+.instrument-node .react-flow__handle-left {
+  background: var(--bg);
+  border: 2px solid var(--notes);
+}
+/* output (right): filled blue dot */
+.instrument-node .react-flow__handle-right {
+  background: var(--instrument);
+  border: 2px solid var(--bg);
+}
+
+/* ---------- States ---------- */
+.instrument-node--muted { opacity: 0.55; }
+.instrument-node--silent { opacity: 0.5; } /* not connected to Output */
