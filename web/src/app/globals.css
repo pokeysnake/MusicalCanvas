@@ -1,0 +1,217 @@
+:root {
+  /* surfaces (dark, from the "Music Canvas Block Designs" mockup) */
+  --bg: #0e1014;          /* page + canvas background */
+  --panel: #12151b;       /* top bar, sidebar, EQ bar */
+  --tile: #171a21;        /* nodes and palette chips */
+  --tile-raised: #1c2029; /* buttons / inputs sitting on a tile */
+  --tile-border: #2a303b; /* tile outline */
+  --line: #232833;        /* dividers and panel borders */
+
+  /* text */
+  --text: #e8eaed;
+  --muted: #9aa3b2;         /* labels, inactive tabs (readable on bg, panel and tile) */
+  --muted-on-tile: #9aa3b2; /* kept so notes-node.css works unchanged */
+
+  /* accents */
+  --accent: #8fa8ff;       /* buttons, active tab (same blue as Instrument) */
+  --accent-ink: #0e1014;   /* text on accent buttons */
+  --instrument: #8fa8ff;
+  --filter: #f5b06b;
+  --notes: #6ee0c4;
+  --notes-tint: rgba(110, 224, 196, 0.14);
+  --notes-chip: rgba(110, 224, 196, 0.10);
+  --notes-chip-border: rgba(110, 224, 196, 0.35);
+  --error: #ffb4ab;
+
+  /* type (load Geist + Geist Mono via next/font or Google Fonts) */
+  --font-sans: "Geist", system-ui, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+/* RESET AND FULL-HEIGHT PAGE */
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+button, input { font: inherit; } /* form controls don't inherit fonts by default */
+
+/* APP GRID */
+.app {
+  display: grid;
+  grid-template-columns: 1fr 240px;      /* canvas | sidebar */
+  grid-template-rows: 52px 1fr 72px;     /* top bar | main | EQ bar */
+  height: 100vh;
+}
+
+/* TOP BAR AND BUTTONS */
+.topbar {
+  grid-column: 1 / 2;
+  grid-row: 1 / 2;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+
+.topbar input {
+  width: 64px;
+  background: var(--tile);
+  color: var(--text);
+  border: 1px solid var(--tile-border);
+  border-radius: 8px;
+  padding: 4px 8px;
+  font-family: var(--font-mono);
+}
+.topbar input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(143, 168, 255, 0.2);
+}
+
+.topbar button {
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  min-height: 32px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.topbar button:hover { filter: brightness(1.08); }
+.topbar button.secondary {
+  background: var(--tile-raised);
+  color: var(--text);
+  border: 1px solid var(--tile-border);
+}
+
+/* SIDEBAR (collaborators + palette) */
+.side {
+  grid-column: 2 / 3;
+  grid-row: 1 / 4;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  padding: 16px;
+  overflow: auto; /* long palette scrolls inside the sidebar */
+}
+.side h4 {
+  margin: 16px 0 8px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+.side .chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  background: var(--tile);
+  border: 1px solid var(--tile-border);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+  font-size: 14px;
+  cursor: grab;
+}
+.side .chip:hover { border-color: #3a4150; }
+.side .chip:active { cursor: grabbing; }
+
+/* TABS, CANVAS AND STRUDEL CODE */
+.main {
+  grid-column: 1 / 2;
+  grid-row: 2 / 3;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 6px 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.tabs button {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1px; /* sit the active underline on the tab bar's border */
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.tabs button:hover { color: var(--text); }
+.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+
+.canvas { flex: 1; min-height: 0; }
+
+.code {
+  margin: 0;
+  padding: 16px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+  background: var(--bg);
+  overflow: auto;
+  flex: 1;
+}
+
+/* EQ BAR */
+.eq {
+  grid-column: 1 / 2;
+  grid-row: 3 / 4;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 16px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.who { font-size: 13px; }
+.err { color: var(--error); font-size: 12px; }
+
+/* REACT FLOW THEME
+   Must match React Flow's own selector (.react-flow.dark, set by colorMode="dark") or its dark theme wins. */
+.react-flow.dark {
+  --xy-background-color-default: var(--bg);
+  --xy-background-pattern-dots-color-default: #262b35;
+
+  --xy-node-color-default: var(--text);
+  --xy-node-background-color-default: var(--tile);
+  --xy-node-border-default: 1px solid var(--tile-border);
+  --xy-node-boxshadow-selected-default: 0 0 0 2px var(--accent);
+
+  --xy-edge-stroke-default: #3a4150;
+  --xy-edge-stroke-width-default: 2;
+  --xy-edge-stroke-selected-default: var(--accent);
+  --xy-connectionline-stroke-default: var(--accent);
+
+  --xy-handle-background-color-default: var(--accent);
+  --xy-handle-border-color-default: var(--bg);
+
+  --xy-controls-button-background-color-default: var(--tile);
+  --xy-controls-button-background-color-hover-default: var(--tile-raised);
+  --xy-controls-button-color-default: var(--text);
+  --xy-controls-button-color-hover-default: var(--text);
+  --xy-controls-button-border-color-default: var(--tile-border);
+
+  --xy-minimap-background-color-default: var(--panel);
+  --xy-selection-background-color-default: rgba(143, 168, 255, 0.08);
+  --xy-selection-border-default: 1px dashed var(--accent);
+}
+
+/* BPM box shows red while the typed value is out of range */
+.topbar input[aria-invalid="true"] { border-color: var(--error); }

@@ -1,0 +1,176 @@
+/* Notes node, matching the "Music Canvas Block Designs" mockup (dark cards, teal accent).
+   Load Geist + Geist Mono once (e.g. next/font/google, or a <link> to Google Fonts). */
+
+/* Uses the tokens from globals.css :root (--bg, --tile, --tile-border, --line, --panel,
+   --text, --muted-on-tile, --notes*, --error, --font-sans, --font-mono). */
+
+/* ---------- Card ---------- */
+.notes-node {
+  width: 320px;
+  background: var(--tile);
+  border: 1px solid var(--tile-border);
+  border-radius: 14px;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* React Flow adds .selected to the node wrapper */
+.react-flow__node.selected .notes-node {
+  border-color: var(--notes);
+  box-shadow: 0 0 0 3px rgba(110, 224, 196, 0.2);
+}
+
+/* Strip React Flow's own wrapper styling so only the card shows.
+   (.react-flow__node-notes exists when the node's type is "notes") */
+.react-flow__node-notes,
+.react-flow__node-notes.selected,
+.react-flow__node-notes:hover {
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---------- Header (title) ---------- */
+.notes-node__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.notes-node__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--notes-tint);
+  color: var(--notes);
+  flex-shrink: 0;
+}
+
+.notes-node__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.notes-node__eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--notes);
+}
+
+.notes-node__title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.notes-node__meta {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--muted-on-tile);
+  white-space: nowrap;
+}
+
+/* ---------- Body ---------- */
+.notes-node__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+}
+
+/* Step chips: one per step, wrapping for long patterns */
+.notes-node__steps {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(48px, 1fr));
+  gap: 6px;
+}
+
+.notes-node__step {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  border-radius: 8px;
+  background: var(--notes-chip);
+  border: 1px solid var(--notes-chip-border);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  line-height: 1.15;
+}
+
+.notes-node__step--chord {
+  font-size: 11px;
+  background: rgba(110, 224, 196, 0.18);
+  border-color: rgba(110, 224, 196, 0.55);
+}
+
+.notes-node__step--rest {
+  background: transparent;
+  border: 1px dashed var(--tile-border);
+  color: var(--muted-on-tile);
+}
+
+/* Pattern text field (the thing the user actually edits) */
+.notes-node__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-on-tile);
+}
+
+.notes-node__input {
+  width: 100%;
+  height: 36px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  outline: none;
+}
+
+.notes-node__input:focus {
+  border-color: var(--notes);
+  box-shadow: 0 0 0 3px rgba(110, 224, 196, 0.18);
+}
+
+.notes-node__input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+.notes-node__error {
+  font-size: 12px;
+  color: var(--error);
+}
+
+/* ---------- Handle (filled output dot on the right) ---------- */
+.notes-node .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  background: var(--notes);
+  border: 2px solid var(--bg);
+}
+
+/* Dimmed when not connected to Output */
+.notes-node--silent {
+  opacity: 0.5;
+}
