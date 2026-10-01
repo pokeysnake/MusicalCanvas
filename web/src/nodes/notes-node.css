@@ -170,7 +170,3 @@
   border: 2px solid var(--bg);
 }
 
-/* Dimmed when not connected to Output */
-.notes-node--silent {
-  opacity: 0.5;
-}

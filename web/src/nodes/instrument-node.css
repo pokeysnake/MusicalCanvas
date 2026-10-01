@@ -127,4 +127,3 @@
 
 /* ---------- States ---------- */
 .instrument-node--muted { opacity: 0.55; }
-.instrument-node--silent { opacity: 0.5; } /* not connected to Output */

@@ -215,3 +215,9 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
 
 /* BPM box shows red while the typed value is out of range */
 .topbar input[aria-invalid="true"] { border-color: var(--error); }
+
+/* nodes with no path to Output (unplugged) */
+.react-flow__node.is-silent{
+  opacity: 0.5;
+  transition: opacity 150ms ease;
+}
