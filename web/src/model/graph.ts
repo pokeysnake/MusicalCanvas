@@ -1,8 +1,45 @@
 import type { Edge, Node } from "@xyflow/react";
+import type { NodeType } from "./types";
 
 
 export type NodeLike = { id: string; type?: string };
 export type EdgeLike = { source: string; target: string };
+
+/** which node types may connect to which */
+const VALID_TARGETS: Record<NodeType, NodeType[]> = {
+  notes:      ["instrument"],
+  instrument: ["filter", "output"],
+  filter:     ["filter", "output"],
+  output:     [],
+};
+
+export function isValidPair(sourceType: NodeType, targetType: NodeType) : boolean {
+    return VALID_TARGETS[sourceType].includes(targetType);
+}
+
+/** would adding source --> target create a loop? */
+export function wouldCreateCycle(edges: EdgeLike[], source: string, target: string): boolean {
+  if (source === target) return true;
+
+  const next = new Map<string, string[]>();          // source -> [targets]
+  for (const e of edges) {
+    const list = next.get(e.source) ?? [];
+    list.push(e.target);
+    next.set(e.source, list);
+  }
+
+  // DFS forward from target looking for source
+  const seen = new Set<string>();
+  const stack = [target];
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    if (cur === source) return true;
+    if (seen.has(cur)) continue;
+    seen.add(cur);
+    stack.push(...(next.get(cur) ?? []));
+  }
+  return false;
+}
 
 
 /** IDs of every node that has a path to the Output node (including output itself) */

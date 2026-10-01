@@ -49,7 +49,7 @@ export type Settings = {
  */
 export type Doc = {
   nodes: Record<string, GraphNode>;
-  edges: Record<string, GraphNode>;
+  edges: Record<string, GraphEdge>;
   settings: Settings;
 };
 
