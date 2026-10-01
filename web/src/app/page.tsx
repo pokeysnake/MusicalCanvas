@@ -11,6 +11,7 @@ import { play, stop } from "@/audio/strudel"
 import NotesNode from "@/nodes/NotesNode"; // needs `export default` in NotesNode.tsx
 import InstrumentNode from "@/nodes/InstrumentNode";
 import FilterNode from "@/nodes/FilterNode";
+import OutputNode from "@/nodes/OutputNode";
 
 
 /* Node Config */
@@ -30,12 +31,18 @@ const initialNodes: Node[] = [
     {
         id:"n3",
         type:"filter",
-        position: { x: 680, y: 60 }, 
+        position: { x: 780, y: 60 }, 
         data: { kind: "lpf", value: 800, q: 0.7 },
+    },
+    {
+        id:"n4",
+        type:"output",
+        position: { x: 1080, y: 60 }, 
+        data: {  },
     },
 ];
 
-const nodeTypes = { notes: NotesNode, instrument: InstrumentNode, filter: FilterNode }; //declared OUTSIDE component
+const nodeTypes = { notes: NotesNode, instrument: InstrumentNode, filter: FilterNode, output: OutputNode }; //declared OUTSIDE component
 
 /* Placeholder for edges content*/
 const initialEdges: Edge[] = [{ id: "e1", source: "n1", target: "n2" }];

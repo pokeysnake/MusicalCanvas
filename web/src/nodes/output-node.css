@@ -1,0 +1,110 @@
+/* Output node, matching the mockup (neutral card: the end of the signal chain).
+   Uses globals.css tokens: --tile, --tile-border, --tile-raised, --bg, --text,
+   --muted-on-tile, --notes, --filter, --font-sans. */
+
+/* ---------- Strip React Flow's wrapper ----------
+   "output" is ALSO one of React Flow's built-in node types, so its stylesheet gives
+   .react-flow__node-output a fixed 150px width, 10px padding, 12px centered text, a border
+   and a background. Reset all of it, or the card gets squeezed, centered and ringed. */
+.react-flow__node-output,
+.react-flow__node-output.selected,
+.react-flow__node-output:hover,
+.react-flow__node-output.selectable:hover,
+.react-flow__node-output.selectable.selected {
+  width: auto;
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+  font-size: inherit;
+  text-align: left;
+  color: inherit;
+}
+
+/* ---------- Card ---------- */
+.output-node {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 200px;
+  min-height: 72px;
+  padding: 12px 14px;
+  background: var(--tile);
+  border: 1px solid var(--tile-border);
+  border-radius: 14px;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+/* selected: neutral white outline (Output has no accent color) */
+.react-flow__node.selected .output-node {
+  border-color: var(--text);
+  box-shadow: 0 0 0 3px rgba(232, 234, 237, 0.15);
+}
+
+/* ---------- Icon ---------- */
+.output-node__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  background: var(--tile-raised);
+  color: var(--text);
+  flex-shrink: 0;
+}
+
+/* ---------- Title block ---------- */
+.output-node__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.output-node__eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  line-height: 1.2;
+  color: var(--muted-on-tile);
+}
+
+.output-node__title {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+/* ---------- Level meter (static until Stage 9) ---------- */
+.output-node__meter {
+  display: flex;
+  align-items: flex-end;  /* bars grow up from the bottom */
+  gap: 3px;
+  height: 28px;
+  margin-left: auto;      /* push to the right edge */
+  flex-shrink: 0;
+}
+
+.output-node__bar {
+  display: block;         /* spans are inline by default and ignore width/height */
+  width: 4px;
+  border-radius: 2px;
+  background: var(--notes);
+}
+
+.output-node__bar--peak {
+  background: var(--filter);
+}
+
+/* ---------- Handle (input only, hollow amber ring) ---------- */
+.output-node .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  background: var(--bg);
+  border: 2px solid var(--filter);
+}
