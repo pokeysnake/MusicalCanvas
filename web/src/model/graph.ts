@@ -1,7 +1,12 @@
 import type { Edge, Node } from "@xyflow/react";
 
+
+export type NodeLike = { id: string; type?: string };
+export type EdgeLike = { source: string; target: string };
+
+
 /** IDs of every node that has a path to the Output node (including output itself) */
-export function nodesReachingOutput(nodes: Node[], edges: Edge[]): Set<String>{
+export function nodesReachingOutput(nodes: NodeLike[], edges: EdgeLike[]): Set<string>{
     const output = nodes.find((n) => n.type === "output");
     if(!output) return new Set();
 
