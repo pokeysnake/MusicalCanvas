@@ -1,0 +1,177 @@
+/* Filter node, matching the mockup (dark card, amber accent).
+   Uses globals.css tokens: --tile, --tile-border, --line, --bg, --text, --muted-on-tile,
+   --filter, --instrument, --error, --font-sans, --font-mono. */
+
+/* ---------- Strip React Flow's wrapper (node type must be "filter") ---------- */
+.react-flow__node-filter,
+.react-flow__node-filter.selected,
+.react-flow__node-filter:hover {
+  padding: 0;
+  border: none;
+  border-radius: 14px;
+  background: transparent;
+  box-shadow: none;
+}
+
+/* ---------- Card ---------- */
+.filter-node {
+  width: 240px;
+  background: var(--tile);
+  border: 1px solid var(--tile-border);
+  border-radius: 14px;
+  color: var(--text);
+  font-family: var(--font-sans);
+}
+
+.react-flow__node.selected .filter-node {
+  border-color: var(--filter);
+  box-shadow: 0 0 0 3px rgba(245, 176, 107, 0.2);
+}
+
+/* ---------- Header ---------- */
+.filter-node__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.filter-node__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: rgba(245, 176, 107, 0.14);
+  color: var(--filter);
+  flex-shrink: 0;
+}
+
+.filter-node__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.filter-node__eyebrow {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--filter);
+}
+
+/* Type picker: native <select> styled to look like a title */
+.filter-node__kind {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0 18px 0 0;
+  border: 0;
+  background: transparent
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 20 20' fill='none' stroke='%239aa3b2' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M5 8l5 5 5-5'/%3E%3C/svg%3E")
+    no-repeat right center;
+  color: var(--text);
+  font: 600 14px var(--font-sans);
+  cursor: pointer;
+}
+.filter-node__kind:focus-visible {
+  outline: 2px solid var(--filter);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+.filter-node__kind option {
+  background: var(--tile);
+  color: var(--text);
+}
+
+/* ---------- Body ---------- */
+.filter-node__body {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 12px 14px 14px;
+}
+
+.filter-node__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 0;
+}
+
+.filter-node__field--small {
+  flex: 0 0 72px;
+}
+
+.filter-node__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted-on-tile);
+}
+
+.filter-node__inputwrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.filter-node__input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--text);
+  font: 14px var(--font-mono);
+  outline: none;
+}
+.filter-node__input:focus {
+  border-color: var(--filter);
+  box-shadow: 0 0 0 3px rgba(245, 176, 107, 0.18);
+}
+.filter-node__input[aria-invalid="true"] {
+  border-color: var(--error);
+}
+
+/* hide the browser's up/down spinner arrows for a cleaner look */
+.filter-node__input::-webkit-outer-spin-button,
+.filter-node__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+.filter-node__input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.filter-node__unit {
+  font: 12px var(--font-mono);
+  color: var(--muted-on-tile);
+}
+
+/* ---------- Handles ---------- */
+.filter-node .react-flow__handle {
+  width: 14px;
+  height: 14px;
+}
+/* input (left): hollow ring in the Instrument color, since instruments plug in here */
+.filter-node .react-flow__handle-left {
+  background: var(--bg);
+  border: 2px solid var(--instrument);
+}
+/* output (right): filled amber dot */
+.filter-node .react-flow__handle-right {
+  background: var(--filter);
+  border: 2px solid var(--bg);
+}
+
+/* ---------- States ---------- */
+.filter-node--silent { opacity: 0.5; } /* not connected to Output */
