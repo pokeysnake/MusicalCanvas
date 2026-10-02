@@ -22,6 +22,7 @@ import FilterNode from "@/nodes/FilterNode";
 import { FILTERS, type FilterKind } from "@/model/filters";
 import { edgeId, type Doc, type GraphNode, type Position } from "@/model/types";
 import { emptyDoc, OUTPUT_ID } from "@/model/doc";
+import { DEFAULT_SOUND } from "@/model/sounds";
 import OutputNode from "@/nodes/OutputNode";
 import NotesEditor from "@/ui/NotesEditor";
 
@@ -33,7 +34,7 @@ const initialDoc: Doc = {
     ...base,
     nodes: {
         n1: { id: "n1", type: "notes",      position: { x: 40,   y: 60 }, data: { name: "Melody", text: "c4 e4 [c4,e4,g4] ~" } },
-        n2: { id: "n2", type: "instrument", position: { x: 420,  y: 60 }, data: { sound: "triangle", muted: false, solo: false } },
+        n2: { id: "n2", type: "instrument", position: { x: 420,  y: 60 }, data: { sound: DEFAULT_SOUND, muted: false, solo: false } },
         n3: { id: "n3", type: "filter",     position: { x: 740,  y: 60 }, data: { kind: "lpf", value: 800, q: 0.7 } },
         [OUTPUT_ID]: { ...base.nodes[OUTPUT_ID], position: { x: 1040, y: 60 } },
     },
@@ -72,7 +73,7 @@ const PALETTE_FILTERS: PaletteItem[] = (Object.keys(FILTERS) as FilterKind[]).ma
 function newNode(item: PaletteItem, id: string, position: Position): GraphNode {
     switch (item.type) {
         case "notes":      return { id, position, type: "notes", data: { name: "New melody", text: "c4 e4 g4 ~" } };
-        case "instrument": return { id, position, type: "instrument", data: { sound: "triangle", muted: false, solo: false } };
+        case "instrument": return { id, position, type: "instrument", data: { sound: DEFAULT_SOUND, muted: false, solo: false } };
         case "filter": {
             const k = item.kind ?? "lpf";
             return { id, position, type: "filter", data: { kind: k, value: FILTERS[k].def, q: 0.7 } };

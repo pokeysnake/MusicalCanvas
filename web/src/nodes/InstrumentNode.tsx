@@ -1,19 +1,13 @@
 "use client";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useUpdateNodeData } from "@/canvas/dispatch";
+import { DEFAULT_SOUND, SOUNDS } from "@/model/sounds";
 import "./instrument-node.css";
-
-const SOUNDS = [
-  { value: "triangle", label: "Triangle" },
-  { value: "sawtooth", label: "Sawtooth" },
-  { value: "square", label: "Square" },
-  { value: "sine", label: "Sine" },
-];
 
 export default function InstrumentNode({ id, data }: NodeProps) {
   // select + toggle buttons are single discrete actions, so they dispatch right away
   const update = useUpdateNodeData(id);
-  const sound = String(data.sound ?? "triangle");
+  const sound = String(data.sound ?? DEFAULT_SOUND);
   const muted = Boolean(data.muted);
   const solo = Boolean(data.solo);
 
@@ -36,7 +30,7 @@ export default function InstrumentNode({ id, data }: NodeProps) {
           value={sound}
           onChange={(e) => update({ sound: e.target.value })}
         >
-          {SOUNDS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          {SOUNDS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
         </select>
       </div>
 

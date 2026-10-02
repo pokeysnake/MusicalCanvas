@@ -132,6 +132,8 @@ describe("applyOp: rejections", () => {
     ["a move with no nodes",           { type: "moveNodes", opId: "x", positions: {} },                           "no nodes"],
     ["updating a missing node",        { type: "updateNodeData", opId: "x", id: "ghost", patch: { value: 1 } },   "does not exist"],
     ["a field from another node type", { type: "updateNodeData", opId: "x", id: "f", patch: { sound: "square" } }, "no field"],
+    ["an instrument with an unknown sound", add({ id: "i2", type: "instrument", position: { x: 0, y: 0 }, data: { sound: "sawtooth", muted: false, solo: false } }), "unknown sound"],
+    ["switching to an unknown sound",  { type: "updateNodeData", opId: "x", id: "i", patch: { sound: "gm_piano" } }, "unknown sound"],
     ["bpm too high",                   { type: "setSetting", opId: "x", patch: { bpm: 999 } },                    "bpm"],
     ["bpm too low",                    { type: "setSetting", opId: "x", patch: { bpm: 10 } },                     "bpm"],
   ])("rejects %s", (_desc, op, reason) => {

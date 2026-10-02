@@ -1,6 +1,7 @@
 import type { ApplyResult, Doc, GraphEdge, NodeType, Op } from "./types";
 import { edgeId } from "./types";
 import { isValidPair, wouldCreateCycle } from "./graph";
+import { isSoundId } from "./sounds";
 
 // small helpers so every case reads cleanly
 const ok = (doc: Doc): ApplyResult => ({ ok: true, doc });
@@ -43,6 +44,8 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       if (doc.nodes[op.node.id]) return reject("node id already exists");
       if (op.node.type === "output")
         return reject("a room has exactly one Output");
+      if (op.node.type === "instrument" && !isSoundId(op.node.data.sound))
+        return reject(`unknown sound: ${op.node.data.sound}`);
       return ok({ ...doc, nodes: { ...doc.nodes, [op.node.id]: op.node } });
     }
 
@@ -109,6 +112,8 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       const bad = Object.keys(op.patch).filter((k) => !allowed.includes(k));
       if (bad.length > 0)
         return reject(`${node.type} has no field(s): ${bad.join(", ")}`);
+      if (op.patch.sound !== undefined && !isSoundId(op.patch.sound))
+        return reject(`unknown sound: ${op.patch.sound}`);
 
       const updated = {
         ...node,
