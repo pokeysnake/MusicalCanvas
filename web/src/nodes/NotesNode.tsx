@@ -1,9 +1,10 @@
 import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { parseNotes } from "@/model/notes";
 import "./notes-node.css";
 
 export default function NotesNode({ data }: NodeProps) {
-    const text = String(data.text ?? "");
-    const steps = text.split(/\s+(?![^\[]*\])/).filter(Boolean);
+    const parsed = parseNotes(String(data.text ?? ""));
+    const steps = parsed.ok ? parsed.steps.map((s) => s.text) : [];
 
     return (
         <div className="notes-node">
@@ -12,13 +13,13 @@ export default function NotesNode({ data }: NodeProps) {
                     <span className="notes-node__eyebrow">Notes</span>
                     <span className="notes-node__title">{String(data.name ?? "Untitled")}</span>
                 </div>
-                <span className="notes-node__meta">{steps.length} steps</span>
+                <span className="notes-node__meta">{parsed.ok ? `${steps.length} steps` : "invalid"}</span>
             </div>
             <div className="notes-node__body">
                 <div className="notes-node__steps">
                     {steps.map((s, i) => {
                         const isRest = s === "~";
-                        const isChord = s.startsWith("[");
+                        const isChord = s.startsWith("[") && s.endsWith("]") && s.includes(",");
                         return (
                             <div
                                 key={i}

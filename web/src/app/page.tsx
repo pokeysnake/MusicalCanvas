@@ -23,6 +23,7 @@ import { FILTERS, type FilterKind } from "@/model/filters";
 import { edgeId, type Doc, type GraphNode, type Position } from "@/model/types";
 import { emptyDoc, OUTPUT_ID } from "@/model/doc";
 import OutputNode from "@/nodes/OutputNode";
+import NotesEditor from "@/ui/NotesEditor";
 
 
 /* ---------- Starting graph (what's on the canvas at page load) ---------- */
@@ -115,6 +116,13 @@ function Editor() {
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
     const [error, setError] = useState<string | null>(null);
     const { screenToFlowPosition } = useReactFlow();
+
+    // which Notes node has the popup open; look it up in the doc each render so a deleted node closes it
+    const [editingId, setEditingId] = useState<string | null>(null);
+    const editing = editingId ? doc.nodes[editingId] : undefined;
+    const onNodeDoubleClick = useCallback((_: unknown, node: Node) => {
+        if (node.type === "notes") setEditingId(node.id);
+    }, []);
 
     /* BPM: typed text kept separate from the value we use, so the box can be empty while typing */
     const [bpmText, setBpmText] = useState(String(BPM_DEFAULT));
@@ -270,7 +278,8 @@ function Editor() {
                     <ReactFlow
                         nodes={nodes} edges={edges} nodeTypes={nodeTypes}
                         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-                        onNodeDragStop={onNodeDragStop}
+                        onNodeDragStop={onNodeDragStop} onNodeDoubleClick={onNodeDoubleClick}
+                        zoomOnDoubleClick={false}
                         onBeforeDelete={onBeforeDelete} onDelete={onDelete}
                         onConnect={onConnect} isValidConnection={isValidConnection}
                         onDragOver={onDragOver} onDrop={onDrop}
@@ -308,6 +317,12 @@ function Editor() {
                 <span>EQ</span><span>L</span><span>M</span><span>H</span>
                 <span>(dials arrive in Stage 9)</span>
             </footer>
+
+            {/* outside <ReactFlow>, so typing in it never reaches the canvas */}
+            {editing?.type === "notes" && (
+                <NotesEditor key={editing.id} nodeId={editing.id} name={editing.data.name} text={editing.data.text}
+                    onClose={() => setEditingId(null)} />
+            )}
         </div>
         </DispatchProvider>
     );
