@@ -1,5 +1,6 @@
 "use client";
-import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { useUpdateNodeData } from "@/canvas/dispatch";
 import "./instrument-node.css";
 
 const SOUNDS = [
@@ -10,9 +11,8 @@ const SOUNDS = [
 ];
 
 export default function InstrumentNode({ id, data }: NodeProps) {
-  // Stage 0-2 shortcut: edits go straight into React Flow state.
-  // In Stage 3 replace updateNodeData with an `updateNodeData` op on your doc model.
-  const { updateNodeData } = useReactFlow();
+  // select + toggle buttons are single discrete actions, so they dispatch right away
+  const update = useUpdateNodeData(id);
   const sound = String(data.sound ?? "triangle");
   const muted = Boolean(data.muted);
   const solo = Boolean(data.solo);
@@ -34,7 +34,7 @@ export default function InstrumentNode({ id, data }: NodeProps) {
           className="instrument-node__sound nodrag"
           aria-label="Sound"
           value={sound}
-          onChange={(e) => updateNodeData(id, { sound: e.target.value })}
+          onChange={(e) => update({ sound: e.target.value })}
         >
           {SOUNDS.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
         </select>
@@ -42,9 +42,9 @@ export default function InstrumentNode({ id, data }: NodeProps) {
 
       <div className="instrument-node__actions">
         <button type="button" className="instrument-node__btn nodrag" aria-label="Mute"
-                aria-pressed={muted} onClick={() => updateNodeData(id, { muted: !muted })}>M</button>
+                aria-pressed={muted} onClick={() => update({ muted: !muted })}>M</button>
         <button type="button" className="instrument-node__btn nodrag" aria-label="Solo"
-                aria-pressed={solo} onClick={() => updateNodeData(id, { solo: !solo })}>S</button>
+                aria-pressed={solo} onClick={() => update({ solo: !solo })}>S</button>
       </div>
 
       <Handle type="source" position={Position.Right} />

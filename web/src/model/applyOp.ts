@@ -16,18 +16,21 @@ const EDITABLE_FIELDS: Record<NodeType, string[]> = {
 
 export function applyOp(doc: Doc, op: Op): ApplyResult {
   switch (op.type) {
-    // moveNode
+    // moveNodes
     /**
      *  { ...doc} copies the doc --> ...doc.nodes copes the node map, ...is what copies
      *  only the parts that change get copied, everything else is shared with the old doc --> we never modify the input
+     *  all-or-nothing: if any id is missing, nothing moves (a multi-node drag is one action)
+     *  STAGE 6 CONFLICT LIST: if one dragged node is deleted remotely mid-drag, this throws away the whole move.
+     *  Probably should skip missing ids like deleteElements does, decide when the server mirrors this.
      */
-    case "moveNode": {
-      const node = doc.nodes[op.id];
-      if (!node) return reject("node does not exist");
-      return ok({
-        ...doc,
-        nodes: { ...doc.nodes, [op.id]: { ...node, position: op.position } },
-      });
+    case "moveNodes": {
+      const ids = Object.keys(op.positions);
+      if (ids.length === 0) return reject("no nodes to move");
+      if (ids.some((id) => !doc.nodes[id])) return reject("node does not exist");
+      const nodes = { ...doc.nodes };
+      for (const id of ids) nodes[id] = { ...nodes[id], position: op.positions[id] };
+      return ok({ ...doc, nodes });
     }
 
     // addNode
@@ -41,16 +44,6 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       if (op.node.type === "output")
         return reject("a room has exactly one Output");
       return ok({ ...doc, nodes: { ...doc.nodes, [op.node.id]: op.node } });
-    }
-
-    // disconnect
-    /**
-     *  const { [key]: _, ...rest } = obj --> gives rest with that key removed and obj itself is unchanged
-     */
-    case "disconnect": {
-      if (!doc.edges[op.edgeId]) return reject("edge does not exist");
-      const { [op.edgeId]: _removed, ...edges } = doc.edges; // copy everything EXCEPT that key
-      return ok({ ...doc, edges });
     }
 
     //connect
@@ -75,21 +68,28 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       return ok({ ...doc, edges: { ...doc.edges, [id]: edge } });
     }
 
-    // deleteNode
+    // deleteElements (replaces deleteNode + disconnect)
     /**
-     *  used edges too because a cable pointing at a node that no longer exists is a "dangling reference" it would break the compiler and dimming code
-     *  deleting a node must always clean up cables
+     *  one delete action (a box-select + Delete) = one op
+     *  - ids that are already gone are SKIPPED, not rejected: if another user deleted it first,
+     *    this delete still did what was meant (delete beats edits)
+     *  - edges touching a deleted node go too, otherwise they'd be "dangling references" that break the compiler and dimming code
+     *  - including the Output rejects the whole op
      */
-    case "deleteNode": {
-      const node = doc.nodes[op.id];
-      if (!node) return reject("node does not exist");
-      if (node.type === "output")
+    case "deleteElements": {
+      if (op.nodeIds.length === 0 && op.edgeIds.length === 0)
+        return reject("nothing to delete");
+      if (op.nodeIds.some((id) => doc.nodes[id]?.type === "output"))
         return reject("the Output node cannot be deleted");
 
-      const { [op.id]: _removed, ...nodes } = doc.nodes;
+      const goneNodes = new Set(op.nodeIds);
+      const goneEdges = new Set(op.edgeIds);
+      const nodes = Object.fromEntries(
+        Object.entries(doc.nodes).filter(([id]) => !goneNodes.has(id)),
+      );
       const edges = Object.fromEntries(
         Object.entries(doc.edges).filter(
-          ([, e]) => e.source !== op.id && e.target !== op.id,
+          ([id, e]) => !goneEdges.has(id) && !goneNodes.has(e.source) && !goneNodes.has(e.target),
         ),
       );
       return ok({ ...doc, nodes, edges });

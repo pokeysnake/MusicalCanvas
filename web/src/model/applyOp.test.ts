@@ -22,6 +22,7 @@ const filter = (id: string): GraphNode =>
 
 const add = (node: GraphNode): Op => ({ type: "addNode", opId: opId(), node });
 const connect = (source: string, target: string): Op => ({ type: "connect", opId: opId(), source, target });
+const del = (nodeIds: string[], edgeIds: string[] = []): Op => ({ type: "deleteElements", opId: opId(), nodeIds, edgeIds });
 
 /* ---------- apply helpers ---------- */
 // apply an op that MUST succeed; fail the test loudly if it's rejected
@@ -65,9 +66,18 @@ describe("applyOp: happy paths", () => {
     expect(doc.nodes.n1.type).toBe("notes");
   });
 
-  it("moveNode changes the position", () => {
-    const doc = mustApply(chainDoc(), { type: "moveNode", opId: opId(), id: "n", position: { x: 50, y: 75 } });
+  it("moveNodes changes the position", () => {
+    const doc = mustApply(chainDoc(), { type: "moveNodes", opId: opId(), positions: { n: { x: 50, y: 75 } } });
     expect(doc.nodes.n.position).toEqual({ x: 50, y: 75 });
+  });
+
+  it("moveNodes moves several nodes in one op", () => {
+    const doc = mustApply(chainDoc(), {
+      type: "moveNodes", opId: opId(), positions: { n: { x: 1, y: 2 }, i: { x: 3, y: 4 } },
+    });
+    expect(doc.nodes.n.position).toEqual({ x: 1, y: 2 });
+    expect(doc.nodes.i.position).toEqual({ x: 3, y: 4 });
+    expect(doc.nodes.f.position).toEqual({ x: 0, y: 0 }); // not in the op, untouched
   });
 
   it("updateNodeData changes one field and keeps the others", () => {
@@ -86,13 +96,13 @@ describe("applyOp: happy paths", () => {
     expect(doc.edges["n->i"]).toEqual({ id: "n->i", source: "n", target: "i" });
   });
 
-  it("disconnect removes the edge", () => {
-    const doc = mustApply(chainDoc(), { type: "disconnect", opId: opId(), edgeId: "n->i" });
+  it("deleteElements removes an edge", () => {
+    const doc = mustApply(chainDoc(), del([], ["n->i"]));
     expect(doc.edges["n->i"]).toBeUndefined();
   });
 
-  it("deleteNode removes the node", () => {
-    const doc = mustApply(chainDoc(), { type: "deleteNode", opId: opId(), id: "n" });
+  it("deleteElements removes a node", () => {
+    const doc = mustApply(chainDoc(), del(["n"]));
     expect(doc.nodes.n).toBeUndefined();
   });
 
@@ -115,12 +125,13 @@ describe("applyOp: rejections", () => {
     ["a node to itself",               connect("f", "f"),                                                          ""],
     ["adding a second Output",         add({ id: "o2", type: "output", position: { x: 0, y: 0 }, data: {} }),     "exactly one Output"],
     ["adding a duplicate id",          add(notes("n")),                                                            "already exists"],
-    ["deleting the Output",            { type: "deleteNode", opId: "x", id: OUTPUT_ID },                          "cannot be deleted"],
-    ["deleting a missing node",        { type: "deleteNode", opId: "x", id: "ghost" },                            "does not exist"],
-    ["moving a missing node",          { type: "moveNode", opId: "x", id: "ghost", position: { x: 1, y: 1 } },    "does not exist"],
+    ["deleting the Output",            del([OUTPUT_ID]),                                                           "cannot be deleted"],
+    ["the Output inside a batch",      del(["n", OUTPUT_ID]),                                                      "cannot be deleted"],
+    ["a delete with nothing in it",    del([], []),                                                                "nothing to delete"],
+    ["moving a missing node",          { type: "moveNodes", opId: "x", positions: { ghost: { x: 1, y: 1 } } },    "does not exist"],
+    ["a move with no nodes",           { type: "moveNodes", opId: "x", positions: {} },                           "no nodes"],
     ["updating a missing node",        { type: "updateNodeData", opId: "x", id: "ghost", patch: { value: 1 } },   "does not exist"],
     ["a field from another node type", { type: "updateNodeData", opId: "x", id: "f", patch: { sound: "square" } }, "no field"],
-    ["disconnecting a missing edge",   { type: "disconnect", opId: "x", edgeId: "a->b" },                         "does not exist"],
     ["bpm too high",                   { type: "setSetting", opId: "x", patch: { bpm: 999 } },                    "bpm"],
     ["bpm too low",                    { type: "setSetting", opId: "x", patch: { bpm: 10 } },                     "bpm"],
   ])("rejects %s", (_desc, op, reason) => {
@@ -174,10 +185,10 @@ describe("applyOp: purity", () => {
   it("never modifies the input doc (frozen doc, every op type)", () => {
     const doc = deepFreeze(chainDoc());
     expect(() => {
-      applyOp(doc, { type: "moveNode", opId: "x", id: "n", position: { x: 9, y: 9 } });
+      applyOp(doc, { type: "moveNodes", opId: "x", positions: { n: { x: 9, y: 9 } } });
       applyOp(doc, { type: "updateNodeData", opId: "x", id: "f", patch: { value: 900 } });
-      applyOp(doc, { type: "deleteNode", opId: "x", id: "i" });
-      applyOp(doc, { type: "disconnect", opId: "x", edgeId: "n->i" });
+      applyOp(doc, del(["i"]));
+      applyOp(doc, del([], ["n->i"]));
       applyOp(doc, { type: "setSetting", opId: "x", patch: { eq: { low: 3, mid: 0, high: 0 } } });
       applyOp(doc, add(notes("new")));
       applyOp(doc, connect("new", "i")); // rejected ("new" isn't in this doc), still must not mutate
@@ -187,7 +198,21 @@ describe("applyOp: purity", () => {
   it("leaves the old doc identical after a change (snapshot)", () => {
     const doc = chainDoc();
     const before = structuredClone(doc);
-    mustApply(doc, { type: "deleteNode", opId: "x", id: "i" });
+    mustApply(doc, del(["i"]));
+    expect(doc).toEqual(before);
+  });
+
+  it("a moveNodes with one missing id moves nothing", () => {
+    const doc = chainDoc();
+    const before = structuredClone(doc);
+    mustReject(doc, { type: "moveNodes", opId: "x", positions: { n: { x: 9, y: 9 }, ghost: { x: 1, y: 1 } } });
+    expect(doc).toEqual(before);
+  });
+
+  it("a delete that includes the Output deletes nothing", () => {
+    const doc = chainDoc();
+    const before = structuredClone(doc);
+    mustReject(doc, del(["n", OUTPUT_ID]));
     expect(doc).toEqual(before);
   });
 
@@ -204,8 +229,28 @@ describe("applyOp: purity", () => {
    Side effects: the "remember to also..." behavior
    ===================================================================== */
 describe("applyOp: side effects", () => {
-  it("deleteNode removes every edge touching the node", () => {
-    const doc = mustApply(chainDoc(), { type: "deleteNode", opId: "x", id: "i" });
+  it("deleteElements skips ids that are already gone (someone else deleted them first)", () => {
+    const doc = mustApply(chainDoc(), del(["ghost", "n"], ["a->b"]));
+    expect(doc.nodes.n).toBeUndefined();
+    expect(Object.keys(doc.nodes)).toHaveLength(3); // i, f, output
+  });
+
+  it("deleteElements with only missing ids succeeds and changes nothing", () => {
+    const start = chainDoc();
+    const doc = mustApply(start, del(["ghost"], ["a->b"]));
+    expect(doc).toEqual(start);
+  });
+
+  it("deleteElements removes nodes and unrelated edges in one op", () => {
+    const doc = mustApply(chainDoc(), del(["n"], [edgeId("f", OUTPUT_ID)]));
+    expect(doc.nodes.n).toBeUndefined();
+    expect(doc.edges["n->i"]).toBeUndefined();               // attached to n
+    expect(doc.edges[edgeId("f", OUTPUT_ID)]).toBeUndefined(); // named directly
+    expect(doc.edges["i->f"]).toBeDefined();                 // untouched
+  });
+
+  it("deleting a node removes every edge touching it", () => {
+    const doc = mustApply(chainDoc(), del(["i"]));
     expect(doc.edges["n->i"]).toBeUndefined();
     expect(doc.edges["i->f"]).toBeUndefined();
     expect(doc.edges[edgeId("f", OUTPUT_ID)]).toBeDefined(); // unrelated edge survives
@@ -229,7 +274,7 @@ describe("applyOp: side effects", () => {
     const before = chainDoc();
     expect(nodesReachingOutput(Object.values(before.nodes), Object.values(before.edges)).has("n")).toBe(true);
 
-    const after = mustApply(before, { type: "deleteNode", opId: "x", id: "i" });
+    const after = mustApply(before, del(["i"]));
     expect(nodesReachingOutput(Object.values(after.nodes), Object.values(after.edges)).has("n")).toBe(false);
   });
 });
@@ -259,7 +304,7 @@ describe("applyOp: sequences", () => {
   it("disconnecting then reconnecting returns to the same edges", () => {
     const start = chainDoc();
     const end = applyAll(start, [
-      { type: "disconnect", opId: opId(), edgeId: "i->f" },
+      del([], ["i->f"]),
       connect("i", "f"),
     ]);
     expect(end.edges).toEqual(start.edges);

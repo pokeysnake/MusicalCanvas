@@ -1,34 +1,42 @@
 "use client";
 
-import { useCallback, useState, type DragEvent } from "react";
+import { useCallback, useMemo, useReducer, useState, type DragEvent } from "react";
 import {
     Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow,
-    addEdge, getOutgoers, useEdgesState, useNodesState,
-    type Connection, type Edge, type Node,
+    type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
 } from "@xyflow/react";
 
-
-import { useMemo } from "react";
 import { nodesReachingOutput } from "@/model/graph";
+import { applyOp } from "@/model/applyOp";
+import { initialState, reducer } from "@/model/reducer";
+import { emptyUi, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
+import { DispatchProvider } from "@/canvas/dispatch";
 
 
 import { play, stop } from "@/audio/strudel";
 
 import NotesNode from "@/nodes/NotesNode";
 import InstrumentNode from "@/nodes/InstrumentNode";
-import FilterNode, { FILTERS, type FilterKind } from "@/nodes/FilterNode";
+import FilterNode from "@/nodes/FilterNode";
+import { FILTERS, type FilterKind } from "@/model/filters";
+import { edgeId, type Doc, type GraphNode, type Position } from "@/model/types";
+import { emptyDoc, OUTPUT_ID } from "@/model/doc";
 import OutputNode from "@/nodes/OutputNode";
 
 
 /* ---------- Starting graph (what's on the canvas at page load) ---------- */
-const initialNodes: Node[] = [
-    { id: "n1", type: "notes",      position: { x: 40,   y: 60 }, data: { name: "Melody", text: "c4 e4 [c4,e4,g4] ~" } },
-    { id: "n2", type: "instrument", position: { x: 420,  y: 60 }, data: { sound: "triangle", muted: false, solo: false } },
-    { id: "n3", type: "filter",     position: { x: 740,  y: 60 }, data: { kind: "lpf", value: 800, q: 0.7 } },
-    { id: "n4", type: "output",     position: { x: 1040, y: 60 }, data: {} },
-];
-
-const initialEdges: Edge[] = [{ id: "e1", source: "n1", target: "n2" }];
+// built on emptyDoc() so the Output id and default settings match what the server creates in Stage 6
+const base = emptyDoc();
+const initialDoc: Doc = {
+    ...base,
+    nodes: {
+        n1: { id: "n1", type: "notes",      position: { x: 40,   y: 60 }, data: { name: "Melody", text: "c4 e4 [c4,e4,g4] ~" } },
+        n2: { id: "n2", type: "instrument", position: { x: 420,  y: 60 }, data: { sound: "triangle", muted: false, solo: false } },
+        n3: { id: "n3", type: "filter",     position: { x: 740,  y: 60 }, data: { kind: "lpf", value: 800, q: 0.7 } },
+        [OUTPUT_ID]: { ...base.nodes[OUTPUT_ID], position: { x: 1040, y: 60 } },
+    },
+    edges: { [edgeId("n1", "n2")]: { id: edgeId("n1", "n2"), source: "n1", target: "n2" } },
+};
 
 const nodeTypes = {
     notes: NotesNode,
@@ -37,20 +45,13 @@ const nodeTypes = {
     output: OutputNode,
 }; // declared OUTSIDE the component so React Flow doesn't remount nodes every render
 
-/* ---------- Connection rules: which node type may feed which ---------- */
-const ALLOWED_TARGETS: Record<string, string[]> = {
-    notes:      ["instrument"],
-    instrument: ["filter", "output"],
-    filter:     ["filter", "output"],
-    output:     [], // end of the chain, nothing comes out
-};
-
 const HELLO = 'note("c4 e4 [c4,e4,g4] ~").s("triangle")';
 
 
 /* ---------- Palette (the menu of things you can drag onto the canvas) ---------- */
+// no Output chip: every room starts with exactly one and it can't be deleted, so adding one is always rejected
 type PaletteItem = {
-    type: "notes" | "instrument" | "filter" | "output";
+    type: "notes" | "instrument" | "filter";
     kind?: FilterKind;   // only for filters
     label: string;
 };
@@ -58,7 +59,6 @@ type PaletteItem = {
 const PALETTE_NODES: PaletteItem[] = [
     { type: "notes", label: "Notes" },
     { type: "instrument", label: "Instrument" },
-    { type: "output", label: "Output" },
 ];
 
 // built from the FILTERS table, so a new filter type gets a chip automatically
@@ -66,20 +66,27 @@ const PALETTE_FILTERS: PaletteItem[] = (Object.keys(FILTERS) as FilterKind[]).ma
     type: "filter", kind: k, label: FILTERS[k].label,
 }));
 
-// starting data for a freshly dropped node
-function defaultData(item: PaletteItem): Record<string, unknown> {
+// a freshly dropped node with its starting data (typed, so addNode gets a valid GraphNode)
+function newNode(item: PaletteItem, id: string, position: Position): GraphNode {
     switch (item.type) {
-        case "notes":      return { name: "New melody", text: "c4 e4 g4 ~" };
-        case "instrument": return { sound: "triangle", muted: false, solo: false };
+        case "notes":      return { id, position, type: "notes", data: { name: "New melody", text: "c4 e4 g4 ~" } };
+        case "instrument": return { id, position, type: "instrument", data: { sound: "triangle", muted: false, solo: false } };
         case "filter": {
             const k = item.kind ?? "lpf";
-            return { kind: k, value: FILTERS[k].def, q: 0.7 };
+            return { id, position, type: "filter", data: { kind: k, value: FILTERS[k].def, q: 0.7 } };
         }
-        case "output":     return {};
     }
 }
 
-const DRAG_TYPE = "application/musicalcanvas"; // custom type so random drags (text, files) are ignored
+/** new Set with id added/removed; returns the same set when nothing changes (avoids a re-render) */
+function withSelection(set: ReadonlySet<string>, id: string, on: boolean): ReadonlySet<string> {
+    if (set.has(id) === on) return set;
+    const next = new Set(set);
+    if (on) next.add(id); else next.delete(id);
+    return next;
+}
+
+const DRAG_TYPE ="application/musicalcanvas"; // custom type so random drags (text, files) are ignored
 
 
 /* ---------- BPM limits ---------- */
@@ -94,14 +101,16 @@ const BPM_DEFAULT = 120;
    ===================================================================== */
 function Editor() {
     /* ---------- State ---------- */
-    const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
-    const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
-    const live = useMemo(() => nodesReachingOutput(nodes,edges), [nodes,edges]);
-    //same nodes but unreachable ones get a CSS class on React Flow wrapper
-    const displayNodes = useMemo(
-        () => nodes.map((n)=> ({...n, className: live.has(n.id) ? undefined: "is-silent"})),
-        [nodes,live],
+    const [{ doc, error: opError }, dispatch] = useReducer(reducer, initialDoc, initialState);
+    const [ui, setUi] = useState<UiState>(emptyUi);
+
+    // reachability only depends on the doc, so drag frames skip the search
+    const live = useMemo(
+        () => nodesReachingOutput(Object.values(doc.nodes), Object.values(doc.edges)),
+        [doc],
     );
+    const nodes = useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
+    const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
     const [error, setError] = useState<string | null>(null);
     const { screenToFlowPosition } = useReactFlow();
@@ -114,34 +123,90 @@ function Editor() {
 
     const code = `setcpm(${bpm}/4)\n${HELLO}`;
 
+    /* ---------- React Flow changes: UI state only, never the Doc ---------- */
+    // "remove" changes are ignored here; deletes go through onDelete as ops
+    const onNodesChange = useCallback((changes: NodeChange[]) => {
+        setUi((prev) => {
+            let { drag, selected, dims } = prev;
+            for (const c of changes) {
+                if (c.type === "position" && c.position) {
+                    drag = { ...drag, [c.id]: c.position };
+                } else if (c.type === "dimensions" && c.dimensions) {
+                    dims = { ...dims, [c.id]: c.dimensions };
+                } else if (c.type === "select") {
+                    selected = withSelection(selected, c.id, c.selected);
+                }
+            }
+            return { drag, selected, dims };
+        });
+    }, []);
+
+    const onEdgesChange = useCallback((changes: EdgeChange[]) => {
+        setUi((prev) => {
+            let { selected } = prev;
+            for (const c of changes) {
+                if (c.type === "select") selected = withSelection(selected, c.id, c.selected);
+            }
+            return selected === prev.selected ? prev : { ...prev, selected };
+        });
+    }, []);
+
+    // one moveNodes op for the whole drag (even with several nodes selected), and clear the overlay in
+    // the same handler (React batches both, so no snap-back; if the op is rejected, clearing the
+    // overlay snaps the nodes back to their Doc positions)
+    const onNodeDragStop = useCallback((_: unknown, _node: Node, dragged: Node[]) => {
+        const positions = Object.fromEntries(dragged.map((n) => [n.id, n.position]));
+        dispatch({ type: "moveNodes", opId: crypto.randomUUID(), positions });
+        setUi((prev) => {
+            const drag = { ...prev.drag };
+            for (const n of dragged) delete drag[n.id];
+            return { ...prev, drag };
+        });
+    }, []);
+
     /* ---------- Connections ---------- */
-    const onConnect = useCallback(
-        (c: Connection) => setEdges((eds) => addEdge(c, eds)),
-        [setEdges],
-    );
+    const onConnect = useCallback((c: Connection) => {
+        dispatch({ type: "connect", opId: crypto.randomUUID(), source: c.source, target: c.target });
+    }, []);
 
-    // Refuses a connection while it's being dragged (the line won't snap to a bad handle)
-    const isValidConnection = useCallback((c: Connection | Edge) => {
-        const source = nodes.find((n) => n.id === c.source);
-        const target = nodes.find((n) => n.id === c.target);
-        if (!source || !target || source.id === target.id) return false;
+    // Refuses a connection while it's being dragged (the line won't snap to a bad handle).
+    // applyOp is pure, so we run a throwaway connect op and only look at .ok: one set of rules, in the model.
+    const isValidConnection = useCallback((c: Connection | Edge) =>
+        applyOp(doc, { type: "connect", opId: "check", source: c.source, target: c.target }).ok,
+    [doc]);
 
-        // type rules
-        if (!ALLOWED_TARGETS[source.type ?? ""]?.includes(target.type ?? "")) return false;
+    /* ---------- Deleting ---------- */
+    // Runs before anything is removed: drop the Output (it can't be deleted, so the user never sees a rejection),
+    // and drop edges that were only included because they touch the Output.
+    const onBeforeDelete = useCallback(async ({ nodes: ns, edges: es }: { nodes: Node[]; edges: Edge[] }) => {
+        const keep = ns.filter((n) => n.type !== "output");
+        const kept = new Set(keep.map((n) => n.id));
+        const keepEdges = es.filter((e) => e.selected || kept.has(e.source) || kept.has(e.target));
+        if (keep.length === 0 && keepEdges.length === 0) return false;
+        return { nodes: keep, edges: keepEdges };
+    }, []);
 
-        // no duplicate edge
-        if (edges.some((e) => e.source === source.id && e.target === target.id)) return false;
-
-        // cycle check: if the target can already reach the source, this edge would close a loop
-        const seen = new Set<string>();
-        const reaches = (node: Node): boolean => {
-            if (node.id === source.id) return true;
-            if (seen.has(node.id)) return false;
-            seen.add(node.id);
-            return getOutgoers(node, nodes, edges).some(reaches);
-        };
-        return !reaches(target);
-    }, [nodes, edges]);
+    // One handler for nodes + edges, one deleteElements op per delete action.
+    // React Flow also hands us edges attached to deleted nodes; the op removes those anyway, so overlap is harmless.
+    const onDelete = useCallback(({ nodes: ns, edges: es }: { nodes: Node[]; edges: Edge[] }) => {
+        dispatch({
+            type: "deleteElements",
+            opId: crypto.randomUUID(),
+            nodeIds: ns.map((n) => n.id),
+            edgeIds: es.map((e) => e.id),
+        });
+        // prune UI state for things that no longer exist
+        setUi((prev) => {
+            const removed = new Set([...ns.map((n) => n.id), ...es.map((e) => e.id)]);
+            const drop = <T,>(rec: Record<string, T>) =>
+                Object.fromEntries(Object.entries(rec).filter(([id]) => !removed.has(id)));
+            return {
+                drag: drop(prev.drag),
+                dims: drop(prev.dims),
+                selected: new Set([...prev.selected].filter((id) => !removed.has(id))),
+            };
+        });
+    }, []);
 
     /* ---------- Playback ---------- */
     const onPlay = async () => {
@@ -174,28 +239,17 @@ function Editor() {
 
         const item = JSON.parse(raw) as PaletteItem;
 
-        // rule: only one Output per room
-        if (item.type === "output" && nodes.some((n) => n.type === "output")) {
-            setError("There can only be one Output node.");
-            return;
-        }
-
         // screen pixels -> canvas coordinates (accounts for pan + zoom)
         const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
-        setError(null);
-        setNodes((nds) => nds.concat({
-            id: crypto.randomUUID(),
-            type: item.type,
-            position,
-            data: defaultData(item),
-        }));
-        // Stage 3: this setNodes becomes an `addNode` op on the doc model
-    }, [nodes, screenToFlowPosition, setNodes]);
+        dispatch({ type: "addNode", opId: crypto.randomUUID(), node: newNode(item, crypto.randomUUID(), position) });
+    }, [screenToFlowPosition]);
 
 
     /* ---------- JSX ---------- */
+    // DispatchProvider lets node components send ops (React Flow renders them, so no props from here)
     return (
+        <DispatchProvider dispatch={dispatch}>
         <div className="app">
             <header className="topbar">
                 <label>
@@ -207,7 +261,7 @@ function Editor() {
                 </label>
                 <button onClick={onPlay}>▶ Play</button>
                 <button className="secondary" onClick={() => stop()}>■ Stop</button>
-                {error && <span className="err">{error}</span>}
+                {(opError ?? error) && <span className="err">{opError ?? error}</span>}
             </header>
 
             <section className="main">
@@ -219,8 +273,10 @@ function Editor() {
                 {/* Canvas stays mounted and is only hidden, so zoom/pan survive tab switches */}
                 <div className="canvas" style={{ display: tab === "graph" ? "block" : "none" }}>
                     <ReactFlow
-                        nodes={displayNodes} edges={edges} nodeTypes={nodeTypes}
+                        nodes={nodes} edges={edges} nodeTypes={nodeTypes}
                         onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+                        onNodeDragStop={onNodeDragStop}
+                        onBeforeDelete={onBeforeDelete} onDelete={onDelete}
                         onConnect={onConnect} isValidConnection={isValidConnection}
                         onDragOver={onDragOver} onDrop={onDrop}
                         colorMode="dark" fitView
@@ -258,6 +314,7 @@ function Editor() {
                 <span>(dials arrive in Stage 9)</span>
             </footer>
         </div>
+        </DispatchProvider>
     );
 }
 

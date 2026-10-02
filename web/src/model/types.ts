@@ -1,12 +1,11 @@
 // type-only import
-import type { FilterKind } from "@/nodes/FilterNode";
+import type { FilterKind } from "@/model/filters";
 
 // these match exactly what the four node components alread read
 export type NotesData = { name: string; text: string };
 export type InstrumentData = { sound: string; muted: boolean; solo: boolean };
 export type FilterData = { kind: FilterKind; value: number; q: number };
 export type OutputData = Record<string, never>; //an object with no fields
-//eventually FILTERS and FilterKind live inside the UI for the node --> should move to a model/filters.ts and have both FilterNode.tsx and the model import from there
 
 // Node itself as a discriminated union
 export type Position = { x: number; y: number };
@@ -60,11 +59,10 @@ export type NodePatch = Partial<NotesData & InstrumentData & FilterData>;
 
 export type Op =
   | (OpBase & { type: "addNode"; node: GraphNode })
-  | (OpBase & { type: "moveNode"; id: string; position: Position })
-  | (OpBase & { type: "deleteNode"; id: string })
+  | (OpBase & { type: "moveNodes"; positions: Record<string, Position> }) // one drag = one op, even with several nodes selected
+  | (OpBase & { type: "deleteElements"; nodeIds: string[]; edgeIds: string[] }) // one delete action = one op
   | (OpBase & { type: "updateNodeData"; id: string; patch: NodePatch })
   | (OpBase & { type: "connect"; source: string; target: string })
-  | (OpBase & { type: "disconnect"; edgeId: string })
   | (OpBase & { type: "setSetting"; patch: Partial<Settings> });
 
 // applyOp

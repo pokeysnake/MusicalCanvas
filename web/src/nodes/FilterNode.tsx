@@ -1,19 +1,11 @@
 "use client";
-import { useEffect, useState } from "react";
-import { Handle, Position, useReactFlow, type NodeProps } from "@xyflow/react";
+import { useState } from "react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
+import type { KeyboardEvent } from "react";
 import "./filter-node.css";
 
-/* ---------- Filter types (outside the component; the compiler will reuse this in Stage 4) ---------- */
-export const FILTERS = {
-  lpf:   { label: "Low-pass",  unit: "Hz", min: 20, max: 20000, step: 10,   def: 800,  hasQ: true },
-  hpf:   { label: "High-pass", unit: "Hz", min: 20, max: 20000, step: 10,   def: 200,  hasQ: true },
-  bpf:   { label: "Band-pass", unit: "Hz", min: 20, max: 20000, step: 10,   def: 1000, hasQ: true },
-  room:  { label: "Reverb",    unit: "",   min: 0,  max: 1,     step: 0.05, def: 0.3,  hasQ: false },
-  delay: { label: "Delay",     unit: "",   min: 0,  max: 1,     step: 0.05, def: 0.25, hasQ: false },
-  gain:  { label: "Gain",      unit: "",   min: 0,  max: 2,     step: 0.05, def: 1,    hasQ: false },
-} as const;
-
-export type FilterKind = keyof typeof FILTERS;
+import { FILTERS, type FilterKind } from "@/model/filters";
+import { useUpdateNodeData } from "@/canvas/dispatch";
 
 const Q_MIN = 0.1;
 const Q_MAX = 20;
@@ -25,8 +17,13 @@ const inRange = (text: string, min: number, max: number) => {
   return text !== "" && !Number.isNaN(n) && n >= min && n <= max;
 };
 
+/* Enter commits by blurring, so blur is the one place that dispatches */
+const blurOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
+  if (e.key === "Enter") e.currentTarget.blur();
+};
+
 export default function FilterNode({ id, data }: NodeProps) {
-  const { updateNodeData } = useReactFlow();
+  const update = useUpdateNodeData(id);
 
   /* ---------- Current values from node data ---------- */
   const kind = (data.kind as FilterKind) ?? "lpf";
@@ -34,27 +31,31 @@ export default function FilterNode({ id, data }: NodeProps) {
   const value = Number(data.value ?? spec.def);
   const q = Number(data.q ?? Q_DEFAULT);
 
-  /* ---------- Value field: typed text kept separate from the saved number ---------- */
-  const [valueText, setValueText] = useState(String(value));
-  useEffect(() => { setValueText(String(value)); }, [value]); // sync when value changes from outside
+  /* ---------- Value field: a local draft only while editing ----------
+     typing only changes the draft; one op is sent on blur/Enter (not one per keystroke).
+     When not editing (draft = null) the field shows the Doc value, so outside changes need no syncing. */
+  const [valueDraft, setValueDraft] = useState<string | null>(null);
+  const valueText = valueDraft ?? String(value);
 
-  const commitValue = (text: string) => {
-    setValueText(text);
-    if (inRange(text, spec.min, spec.max)) updateNodeData(id, { value: Number(text) });
+  const commitValue = () => {
+    const n = Number(valueText);
+    if (inRange(valueText, spec.min, spec.max) && n !== value) update({ value: n });
+    setValueDraft(null); // invalid or unchanged: falls back to the saved value
   };
 
   /* ---------- Q field: same pattern (hooks always run, even when Q is hidden) ---------- */
-  const [qText, setQText] = useState(String(q));
-  useEffect(() => { setQText(String(q)); }, [q]);
+  const [qDraft, setQDraft] = useState<string | null>(null);
+  const qText = qDraft ?? String(q);
 
-  const commitQ = (text: string) => {
-    setQText(text);
-    if (inRange(text, Q_MIN, Q_MAX)) updateNodeData(id, { q: Number(text) });
+  const commitQ = () => {
+    const n = Number(qText);
+    if (inRange(qText, Q_MIN, Q_MAX) && n !== q) update({ q: n });
+    setQDraft(null);
   };
 
-  /* ---------- Type change: reset value to the new type's default ---------- */
+  /* ---------- Type change: one action, so kind + reset value go in ONE op ---------- */
   const changeKind = (k: FilterKind) => {
-    updateNodeData(id, { kind: k, value: FILTERS[k].def });
+    update({ kind: k, value: FILTERS[k].def });
   };
 
   return (
@@ -95,8 +96,9 @@ export default function FilterNode({ id, data }: NodeProps) {
               min={spec.min} max={spec.max} step={spec.step}
               value={valueText}
               aria-invalid={!inRange(valueText, spec.min, spec.max)}
-              onChange={(e) => commitValue(e.target.value)}
-              onBlur={() => setValueText(String(value))}
+              onChange={(e) => setValueDraft(e.target.value)}
+              onBlur={commitValue}
+              onKeyDown={blurOnEnter}
             />
             {spec.unit && <span className="filter-node__unit">{spec.unit}</span>}
           </span>
@@ -111,8 +113,9 @@ export default function FilterNode({ id, data }: NodeProps) {
               min={Q_MIN} max={Q_MAX} step={0.1}
               value={qText}
               aria-invalid={!inRange(qText, Q_MIN, Q_MAX)}
-              onChange={(e) => commitQ(e.target.value)}
-              onBlur={() => setQText(String(q))}
+              onChange={(e) => setQDraft(e.target.value)}
+              onBlur={commitQ}
+              onKeyDown={blurOnEnter}
             />
           </label>
         )}
