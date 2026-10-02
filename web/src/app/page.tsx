@@ -11,6 +11,7 @@ import { applyOp } from "@/model/applyOp";
 import { initialState, reducer } from "@/model/reducer";
 import { emptyUi, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
 import { DispatchProvider } from "@/canvas/dispatch";
+import { deleteOp, moveOp } from "@/canvas/ops";
 
 
 import { play, stop } from "@/audio/strudel";
@@ -155,8 +156,7 @@ function Editor() {
     // the same handler (React batches both, so no snap-back; if the op is rejected, clearing the
     // overlay snaps the nodes back to their Doc positions)
     const onNodeDragStop = useCallback((_: unknown, _node: Node, dragged: Node[]) => {
-        const positions = Object.fromEntries(dragged.map((n) => [n.id, n.position]));
-        dispatch({ type: "moveNodes", opId: crypto.randomUUID(), positions });
+        dispatch(moveOp(dragged));
         setUi((prev) => {
             const drag = { ...prev.drag };
             for (const n of dragged) delete drag[n.id];
@@ -189,12 +189,7 @@ function Editor() {
     // One handler for nodes + edges, one deleteElements op per delete action.
     // React Flow also hands us edges attached to deleted nodes; the op removes those anyway, so overlap is harmless.
     const onDelete = useCallback(({ nodes: ns, edges: es }: { nodes: Node[]; edges: Edge[] }) => {
-        dispatch({
-            type: "deleteElements",
-            opId: crypto.randomUUID(),
-            nodeIds: ns.map((n) => n.id),
-            edgeIds: es.map((e) => e.id),
-        });
+        dispatch(deleteOp(ns, es));
         // prune UI state for things that no longer exist
         setUi((prev) => {
             const removed = new Set([...ns.map((n) => n.id), ...es.map((e) => e.id)]);
