@@ -25,6 +25,7 @@ import { emptyDoc, OUTPUT_ID } from "@/model/doc";
 import { DEFAULT_SOUND } from "@/model/sounds";
 import OutputNode from "@/nodes/OutputNode";
 import NotesEditor from "@/ui/NotesEditor";
+import { compile } from "@/model/compile";
 
 
 /* ---------- Starting graph (what's on the canvas at page load) ---------- */
@@ -38,7 +39,11 @@ const initialDoc: Doc = {
         n3: { id: "n3", type: "filter",     position: { x: 740,  y: 60 }, data: { kind: "lpf", value: 800, q: 0.7 } },
         [OUTPUT_ID]: { ...base.nodes[OUTPUT_ID], position: { x: 1040, y: 60 } },
     },
-    edges: { [edgeId("n1", "n2")]: { id: edgeId("n1", "n2"), source: "n1", target: "n2" } },
+    edges: {
+        [edgeId("n1", "n2")]:        { id: edgeId("n1", "n2"),        source: "n1", target: "n2" },
+        [edgeId("n2", "n3")]:        { id: edgeId("n2", "n3"),        source: "n2", target: "n3" },
+        [edgeId("n3", OUTPUT_ID)]:   { id: edgeId("n3", OUTPUT_ID),   source: "n3", target: OUTPUT_ID },
+    },
 };
 
 const nodeTypes = {
@@ -47,8 +52,6 @@ const nodeTypes = {
     filter: FilterNode,
     output: OutputNode,
 }; // declared OUTSIDE the component so React Flow doesn't remount nodes every render
-
-const HELLO = 'note("c4 e4 [c4,e4,g4] ~").s("triangle")';
 
 
 /* ---------- Palette (the menu of things you can drag onto the canvas) ---------- */
@@ -95,7 +98,6 @@ const DRAG_TYPE ="application/musicalcanvas"; // custom type so random drags (te
 /* ---------- BPM limits ---------- */
 const BPM_MIN = 40;
 const BPM_MAX = 240;
-const BPM_DEFAULT = 120;
 
 
 /* =====================================================================
@@ -112,7 +114,9 @@ function Editor() {
         () => nodesReachingOutput(Object.values(doc.nodes), Object.values(doc.edges)),
         [doc],
     );
-    const nodes = useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
+    // the Strudel code for the whole graph; recompiled only when the doc changes
+    const { code, issues } = useMemo(() => compile(doc), [doc]);
+    const nodes =useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
     const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
     const [error, setError] = useState<string | null>(null);
@@ -125,13 +129,11 @@ function Editor() {
         if (node.type === "notes") setEditingId(node.id);
     }, []);
 
-    /* BPM: typed text kept separate from the value we use, so the box can be empty while typing */
-    const [bpmText, setBpmText] = useState(String(BPM_DEFAULT));
+    /* BPM: the doc holds the real value; bpmText is only the typing buffer, so the box can be empty while typing */
+    const bpm = doc.settings.bpm;
+    const [bpmText, setBpmText] = useState(String(bpm));
     const typed = Number(bpmText);
     const bpmValid = bpmText !== "" && typed >= BPM_MIN && typed <= BPM_MAX;
-    const bpm = bpmValid ? typed : BPM_DEFAULT;
-
-    const code = `setcpm(${bpm}/4)\n${HELLO}`;
 
     /* ---------- React Flow changes: UI state only, never the Doc ---------- */
     // "remove" changes are ignored here; deletes go through onDelete as ops
@@ -260,12 +262,21 @@ function Editor() {
                     BPM{" "}
                     <input type="number" min={BPM_MIN} max={BPM_MAX} value={bpmText}
                         aria-invalid={!bpmValid}
-                        onChange={(e) => setBpmText(e.target.value)}
+                        onChange={(e) => {
+                            const t = e.target.value;
+                            setBpmText(t);
+                            const v = Number(t);
+                            // only valid values become an op; the doc keeps the last good BPM otherwise
+                            if (t !== "" && v >= BPM_MIN && v <= BPM_MAX) {
+                                dispatch({ type: "setSetting", opId: crypto.randomUUID(), patch: { bpm: v } });
+                            }
+                        }}
                         onBlur={() => { if (!bpmValid) setBpmText(String(bpm)); }} />
                 </label>
                 <button onClick={onPlay}>▶ Play</button>
                 <button className="secondary" onClick={() => stop()}>■ Stop</button>
                 {(opError ?? error) && <span className="err">{opError ?? error}</span>}
+                {issues.length > 0 && <span className="err">{issues[0].message}</span>}
             </header>
 
             <section className="main">
