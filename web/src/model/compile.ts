@@ -59,7 +59,7 @@ export function compile(doc:Doc): CompileResult {
         for(const n of inputsOf(id)) {
             if(n.type !== "notes") continue;
             const parsed = parseNotes(n.data.text);
-            if(!parsed.ok) issues.set(n.id, `${n.data.name}: ${parsed.message}`);
+            if(!parsed.ok) issues.set(n.id, parsed.message); // the UI adds the node name (canvas/issues.ts)
             else if (parsed.steps.length > 0) texts.push(n.data.text);
         }
         return texts;

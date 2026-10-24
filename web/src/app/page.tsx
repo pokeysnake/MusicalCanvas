@@ -26,6 +26,7 @@ import { DEFAULT_SOUND } from "@/model/sounds";
 import OutputNode from "@/nodes/OutputNode";
 import NotesEditor from "@/ui/NotesEditor";
 import { compile } from "@/model/compile";
+import { issueText } from "@/canvas/issues";
 
 
 /* ---------- Starting graph (what's on the canvas at page load) ---------- */
@@ -117,6 +118,7 @@ function Editor() {
 
     // the Strudel code for the whole graph; recompiled only when the doc changes
     const { code, issues } = useMemo(() => compile(doc), [doc]);
+    const issueLine = issues.map((i) => issueText(doc, i)).join(" · ");
     const nodes = useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
     const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
@@ -301,8 +303,13 @@ function Editor() {
                                 e.currentTarget.style.setProperty("--fill", `${v * 100}%`);
                             }} />
                     </label>
-                    {(opError ?? error) && <span className="err">{opError ?? error}</span>}
-                    {issues.length > 0 && <span className="err">{issues[0].message}</span>}
+                    {/* three independent sources, so one can never hide another:
+                        compile issues (the song still plays without those nodes), a rejected op, and playback */}
+                    <div className="errors">
+                        {issueLine && <span className="err" title={issueLine}>{issueLine}</span>}
+                        {opError && <span className="err" title={opError}>{opError}</span>}
+                        {error && <span className="err" title={error}>Playback: {error}</span>}
+                    </div>
                 </header>
 
                 <section className="main">
