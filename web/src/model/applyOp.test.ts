@@ -136,6 +136,9 @@ describe("applyOp: rejections", () => {
     ["switching to an unknown sound",  { type: "updateNodeData", opId: "x", id: "i", patch: { sound: "gm_piano" } }, "unknown sound"],
     ["bpm too high",                   { type: "setSetting", opId: "x", patch: { bpm: 999 } },                    "bpm"],
     ["bpm too low",                    { type: "setSetting", opId: "x", patch: { bpm: 10 } },                     "bpm"],
+    // NaN and numeric strings slip past < and > (both comparisons are false); a network op can carry either
+    ["bpm that is NaN",                { type: "setSetting", opId: "x", patch: { bpm: NaN } },                    "bpm"],
+    ["bpm sent as a string",           { type: "setSetting", opId: "x", patch: { bpm: "120" as unknown as number } }, "bpm"],
   ])("rejects %s", (_desc, op, reason) => {
     const why = mustReject(chainDoc(), op);
     expect(why).toContain(reason);

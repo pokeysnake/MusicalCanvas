@@ -128,7 +128,8 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
      */
     case "setSetting": {
       const { bpm, eq } = op.patch;
-      if (bpm !== undefined && (bpm < 40 || bpm > 240))
+      // typeof + isFinite first: NaN and "120" both pass < and >, and ops will arrive as JSON from other clients
+      if (bpm !== undefined && (typeof bpm !== "number" || !Number.isFinite(bpm) || bpm < 40 || bpm > 240))
         return reject("bpm must be 40-240");
       return ok({
         ...doc,

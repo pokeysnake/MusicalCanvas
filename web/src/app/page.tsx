@@ -132,18 +132,20 @@ function Editor() {
         if (node.type === "notes") setEditingId(node.id);
     }, []);
 
-    /* BPM: the doc holds the real value; bpmText is only the typing buffer, so the box can be empty while typing */
+    /* BPM: a local draft only while typing (same pattern as FilterNode). When not typing (draft = null) the box
+       shows the doc's BPM, so a change from another client (Stage 5) shows up with no extra syncing. */
     const bpm = doc.settings.bpm;
-    const [bpmText, setBpmText] = useState(String(bpm));
+    const [bpmDraft, setBpmDraft] = useState<string | null>(null);
+    const bpmText = bpmDraft ?? String(bpm);
     const typed = Number(bpmText);
     const bpmValid = bpmText !== "" && typed >= BPM_MIN && typed <= BPM_MAX;
 
-    // blur/Enter: send one op; if there's nothing to send or applyOp would reject it, put the doc's BPM back in the box
+    // blur/Enter: send one op (even an out-of-range one, so opError says why), then drop the draft.
+    // A rejected op leaves the doc as it was, so dropping the draft is also the revert.
     const commitBpm = () => {
         const op = bpmOp(bpmText, bpm);
-        if (!op) { setBpmText(String(bpm)); return; }
-        dispatch(op); // dispatched even if it'll be rejected, so opError tells the user why
-        if (!applyOp(doc, op).ok) setBpmText(String(bpm));
+        if (op) dispatch(op);
+        setBpmDraft(null);
     };
 
     /* ---------- React Flow changes: UI state only, never the Doc ---------- */
@@ -284,7 +286,7 @@ function Editor() {
                         BPM{" "}
                         <input type="number" min={BPM_MIN} max={BPM_MAX} value={bpmText}
                             aria-invalid={!bpmValid}
-                            onChange={(e) => setBpmText(e.target.value)}
+                            onChange={(e) => setBpmDraft(e.target.value)}
                             onBlur={commitBpm}
                             // Enter just blurs, so the op is sent from onBlur only (never twice)
                             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />

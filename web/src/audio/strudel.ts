@@ -27,7 +27,12 @@ async function load() {
   return import("@strudel/web");
 }
 
+// bumped by every stop(); a play() that was waiting on init when Stop was pressed sees a
+// different number afterwards and gives up, so a slow first load can't start music after Stop
+let generation = 0;
+
 export async function play(code: string): Promise<void> {
+  const gen = generation;
   const s = await load();
   if (!ready) {
     ready = Promise.resolve(
@@ -47,11 +52,14 @@ export async function play(code: string): Promise<void> {
       });
   }
   await ready;
+  if (gen !== generation) return; // Stop was pressed while we waited
   applyVolume(s); // the slider may have moved before the first Play
   await s.evaluate(code);
 }
 
 export async function stop(): Promise<void> {
+  generation++;
+  if (!ready) return; // never started: hush() would throw because Strudel has no repl yet
   const s = await load();
   s.hush();
 }
