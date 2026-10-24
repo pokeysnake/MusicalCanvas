@@ -221,3 +221,48 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   opacity: 0.5;
   transition: opacity 150ms ease;
 }
+/* VOLUME SLIDER (top bar)
+   Native range inputs ignore most styling, so appearance is reset and the track/thumb drawn by hand.
+   --fill is set from page.tsx as the slider moves, so the played-through part of the track shows in the accent. */
+.topbar .vol {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.topbar input[type="range"] {
+  --fill: 50%;
+  appearance: none;
+  -webkit-appearance: none;
+  width: 96px;
+  height: 6px;
+  padding: 0;
+  border: 1px solid var(--tile-border);
+  border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) var(--fill), var(--tile-raised) var(--fill));
+  cursor: pointer;
+}
+.topbar input[type="range"]:focus { box-shadow: none; }
+.topbar input[type="range"]:focus-visible { box-shadow: 0 0 0 3px rgba(143, 168, 255, 0.2); }
+
+/* thumb: accent dot with a bg-coloured ring, same look as the node handles */
+.topbar input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--tile-border);
+}
+.topbar input[type="range"]::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 2px solid var(--bg);
+  box-shadow: 0 0 0 1px var(--tile-border);
+}
+.topbar input[type="range"]:hover::-webkit-slider-thumb { filter: brightness(1.08); }
+.topbar input[type="range"]:hover::-moz-range-thumb { filter: brightness(1.08); }

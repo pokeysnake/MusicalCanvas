@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useReducer, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useState, type DragEvent } from "react";
 import {
     Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow,
     type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
@@ -14,7 +14,7 @@ import { DispatchProvider } from "@/canvas/dispatch";
 import { bpmOp, deleteOp, moveOp } from "@/canvas/ops";
 
 
-import { play, stop } from "@/audio/strudel";
+import { play, setVolume, stop } from "@/audio/strudel";
 
 import NotesNode from "@/nodes/NotesNode";
 import InstrumentNode from "@/nodes/InstrumentNode";
@@ -34,15 +34,15 @@ const base = emptyDoc();
 const initialDoc: Doc = {
     ...base,
     nodes: {
-        n1: { id: "n1", type: "notes",      position: { x: 40,   y: 60 }, data: { name: "Melody", text: "c4 e4 [c4,e4,g4] ~" } },
-        n2: { id: "n2", type: "instrument", position: { x: 420,  y: 60 }, data: { sound: DEFAULT_SOUND, muted: false, solo: false } },
-        n3: { id: "n3", type: "filter",     position: { x: 740,  y: 60 }, data: { kind: "lpf", value: 800, q: 0.7 } },
+        n1: { id: "n1", type: "notes", position: { x: 40, y: 60 }, data: { name: "Melody", text: "c4 e4 [c4,e4,g4] ~" } },
+        n2: { id: "n2", type: "instrument", position: { x: 420, y: 60 }, data: { sound: DEFAULT_SOUND, muted: false, solo: false } },
+        n3: { id: "n3", type: "filter", position: { x: 740, y: 60 }, data: { kind: "lpf", value: 800, q: 0.7 } },
         [OUTPUT_ID]: { ...base.nodes[OUTPUT_ID], position: { x: 1040, y: 60 } },
     },
     edges: {
-        [edgeId("n1", "n2")]:        { id: edgeId("n1", "n2"),        source: "n1", target: "n2" },
-        [edgeId("n2", "n3")]:        { id: edgeId("n2", "n3"),        source: "n2", target: "n3" },
-        [edgeId("n3", OUTPUT_ID)]:   { id: edgeId("n3", OUTPUT_ID),   source: "n3", target: OUTPUT_ID },
+        [edgeId("n1", "n2")]: { id: edgeId("n1", "n2"), source: "n1", target: "n2" },
+        [edgeId("n2", "n3")]: { id: edgeId("n2", "n3"), source: "n2", target: "n3" },
+        [edgeId("n3", OUTPUT_ID)]: { id: edgeId("n3", OUTPUT_ID), source: "n3", target: OUTPUT_ID },
     },
 };
 
@@ -75,7 +75,7 @@ const PALETTE_FILTERS: PaletteItem[] = (Object.keys(FILTERS) as FilterKind[]).ma
 // a freshly dropped node with its starting data (typed, so addNode gets a valid GraphNode)
 function newNode(item: PaletteItem, id: string, position: Position): GraphNode {
     switch (item.type) {
-        case "notes":      return { id, position, type: "notes", data: { name: "New melody", text: "c4 e4 g4 ~" } };
+        case "notes": return { id, position, type: "notes", data: { name: "New melody", text: "c4 e4 g4 ~" } };
         case "instrument": return { id, position, type: "instrument", data: { sound: DEFAULT_SOUND, muted: false, solo: false } };
         case "filter": {
             const k = item.kind ?? "lpf";
@@ -92,7 +92,7 @@ function withSelection(set: ReadonlySet<string>, id: string, on: boolean): Reado
     return next;
 }
 
-const DRAG_TYPE ="application/musicalcanvas"; // custom type so random drags (text, files) are ignored
+const DRAG_TYPE = "application/musicalcanvas"; // custom type so random drags (text, files) are ignored
 
 
 /* ---------- BPM limits ---------- */
@@ -114,10 +114,10 @@ function Editor() {
         () => nodesReachingOutput(Object.values(doc.nodes), Object.values(doc.edges)),
         [doc],
     );
-    
+
     // the Strudel code for the whole graph; recompiled only when the doc changes
     const { code, issues } = useMemo(() => compile(doc), [doc]);
-    const nodes =useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
+    const nodes = useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
     const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
     const [error, setError] = useState<string | null>(null);
@@ -193,7 +193,7 @@ function Editor() {
     // applyOp is pure, so we run a throwaway connect op and only look at .ok: one set of rules, in the model.
     const isValidConnection = useCallback((c: Connection | Edge) =>
         applyOp(doc, { type: "connect", opId: "check", source: c.source, target: c.target }).ok,
-    [doc]);
+        [doc]);
 
     /* ---------- Deleting ---------- */
     // Runs before anything is removed: drop the Output (it can't be deleted, so the user never sees a rejection),
@@ -224,14 +224,25 @@ function Editor() {
     }, []);
 
     /* ---------- Playback ---------- */
-    const onPlay = async () => {
-        setError(null);
-        try {
-            await play(code);
-        } catch (e) {
-            setError(e instanceof Error ? e.message : String(e));
-        }
-    };
+    const [playing, setPlaying] = useState(false);
+    // the only place that calls play() --> runs on Play and again whenever the doc compiles to new code while playing
+    useEffect(() => {
+        if (!playing) return;
+        let current = true;
+        play(code).then(
+            () => { if (current) setError(null); },
+            (e) => {
+                if (!current) return;
+                setError(e instanceof Error ? e.message : String(e));
+                setPlaying(false); // e.g. samples failed to load: drop back to stopped so Play can retry
+            },
+        );
+        return () => { current = false; };
+    }, [code, playing]);
+
+    const onPlay = () => setPlaying(true);
+    const onStop = () => { setPlaying(false); stop(); }
+
 
     /* ---------- Palette drag-and-drop ---------- */
     // 1. chip starts dragging: write "what node am I" onto the drag
@@ -265,80 +276,92 @@ function Editor() {
     // DispatchProvider lets node components send ops (React Flow renders them, so no props from here)
     return (
         <DispatchProvider dispatch={dispatch}>
-        <div className="app">
-            <header className="topbar">
-                <label>
-                    BPM{" "}
-                    <input type="number" min={BPM_MIN} max={BPM_MAX} value={bpmText}
-                        aria-invalid={!bpmValid}
-                        onChange={(e) => setBpmText(e.target.value)}
-                        onBlur={commitBpm}
-                        // Enter just blurs, so the op is sent from onBlur only (never twice)
-                        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
-                </label>
-                <button onClick={onPlay}>▶ Play</button>
-                <button className="secondary" onClick={() => stop()}>■ Stop</button>
-                {(opError ?? error) && <span className="err">{opError ?? error}</span>}
-                {issues.length > 0 && <span className="err">{issues[0].message}</span>}
-            </header>
+            <div className="app">
+                <header className="topbar">
+                    <label>
+                        BPM{" "}
+                        <input type="number" min={BPM_MIN} max={BPM_MAX} value={bpmText}
+                            aria-invalid={!bpmValid}
+                            onChange={(e) => setBpmText(e.target.value)}
+                            onBlur={commitBpm}
+                            // Enter just blurs, so the op is sent from onBlur only (never twice)
+                            onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
+                    </label>
+                    <button onClick={onPlay}>▶ Play</button>
+                    <button className="secondary" onClick={onStop}>■ Stop</button>
+                    {/* per-listener volume: local, never an op, so it isn't shared with collaborators */}
+                    <label className="vol">
+                        Vol
+                        <input type="range" min={0} max={1} step={0.01} defaultValue={0.5}
+                            aria-label="Volume"
+                            onChange={(e) => {
+                                const v = Number(e.target.value);
+                                setVolume(v);
+                                // colour the track up to the thumb (see .topbar input[type="range"] in globals.css)
+                                e.currentTarget.style.setProperty("--fill", `${v * 100}%`);
+                            }} />
+                    </label>
+                    {(opError ?? error) && <span className="err">{opError ?? error}</span>}
+                    {issues.length > 0 && <span className="err">{issues[0].message}</span>}
+                </header>
 
-            <section className="main">
-                <div className="tabs">
-                    <button className={tab === "graph" ? "on" : ""} onClick={() => setTab("graph")}>graph</button>
-                    <button className={tab === "strudel" ? "on" : ""} onClick={() => setTab("strudel")}>strudel</button>
-                </div>
-
-                {/* Canvas stays mounted and is only hidden, so zoom/pan survive tab switches */}
-                <div className="canvas" style={{ display: tab === "graph" ? "block" : "none" }}>
-                    <ReactFlow
-                        nodes={nodes} edges={edges} nodeTypes={nodeTypes}
-                        onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-                        onNodeDragStop={onNodeDragStop} onNodeDoubleClick={onNodeDoubleClick}
-                        zoomOnDoubleClick={false}
-                        onBeforeDelete={onBeforeDelete} onDelete={onDelete}
-                        onConnect={onConnect} isValidConnection={isValidConnection}
-                        onDragOver={onDragOver} onDrop={onDrop}
-                        colorMode="dark" fitView
-                    >
-                        <Background />
-                        <Controls />
-                    </ReactFlow>
-                </div>
-                {tab === "strudel" && <pre className="code">{code}</pre>}
-            </section>
-
-            <aside className="side">
-                <h4>Collaborators</h4>
-                <div className="who">● You</div>
-
-                <h4>Nodes</h4>
-                {PALETTE_NODES.map((item) => (
-                    <div key={item.type} className="chip" draggable
-                        onDragStart={(e) => onDragStart(e, item)}>
-                        {item.label}
+                <section className="main">
+                    <div className="tabs">
+                        <button className={tab === "graph" ? "on" : ""} onClick={() => setTab("graph")}>graph</button>
+                        <button className={tab === "strudel" ? "on" : ""} onClick={() => setTab("strudel")}>strudel</button>
                     </div>
-                ))}
 
-                <h4>Filters</h4>
-                {PALETTE_FILTERS.map((item) => (
-                    <div key={item.kind} className="chip" draggable
-                        onDragStart={(e) => onDragStart(e, item)}>
-                        {item.label}
+                    {/* Canvas stays mounted and is only hidden, so zoom/pan survive tab switches */}
+                    <div className="canvas" style={{ display: tab === "graph" ? "block" : "none" }}>
+                        <ReactFlow
+                            nodes={nodes} edges={edges} nodeTypes={nodeTypes}
+                            onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
+                            onNodeDragStop={onNodeDragStop} onNodeDoubleClick={onNodeDoubleClick}
+                            zoomOnDoubleClick={false}
+                            onBeforeDelete={onBeforeDelete} onDelete={onDelete}
+                            onConnect={onConnect} isValidConnection={isValidConnection}
+                            onDragOver={onDragOver} onDrop={onDrop}
+                            colorMode="dark" fitView
+                        >
+                            <Background />
+                            <Controls />
+                        </ReactFlow>
                     </div>
-                ))}
-            </aside>
+                    {tab === "strudel" && <pre className="code">{code}</pre>}
+                </section>
 
-            <footer className="eq">
-                <span>EQ</span><span>L</span><span>M</span><span>H</span>
-                <span>(dials arrive in Stage 9)</span>
-            </footer>
+                <aside className="side">
+                    <h4>Collaborators</h4>
+                    <div className="who">● You</div>
 
-            {/* outside <ReactFlow>, so typing in it never reaches the canvas */}
-            {editing?.type === "notes" && (
-                <NotesEditor key={editing.id} nodeId={editing.id} name={editing.data.name} text={editing.data.text}
-                    onClose={() => setEditingId(null)} />
-            )}
-        </div>
+                    <h4>Nodes</h4>
+                    {PALETTE_NODES.map((item) => (
+                        <div key={item.type} className="chip" draggable
+                            onDragStart={(e) => onDragStart(e, item)}>
+                            {item.label}
+                        </div>
+                    ))}
+
+                    <h4>Filters</h4>
+                    {PALETTE_FILTERS.map((item) => (
+                        <div key={item.kind} className="chip" draggable
+                            onDragStart={(e) => onDragStart(e, item)}>
+                            {item.label}
+                        </div>
+                    ))}
+                </aside>
+
+                <footer className="eq">
+                    <span>EQ</span><span>L</span><span>M</span><span>H</span>
+                    <span>(dials arrive in Stage 9)</span>
+                </footer>
+
+                {/* outside <ReactFlow>, so typing in it never reaches the canvas */}
+                {editing?.type === "notes" && (
+                    <NotesEditor key={editing.id} nodeId={editing.id} name={editing.data.name} text={editing.data.text}
+                        onClose={() => setEditingId(null)} />
+                )}
+            </div>
         </DispatchProvider>
     );
 }
