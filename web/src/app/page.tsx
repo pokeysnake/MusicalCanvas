@@ -11,7 +11,7 @@ import { applyOp } from "@/model/applyOp";
 import { initialState, reducer } from "@/model/reducer";
 import { emptyUi, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
 import { DispatchProvider } from "@/canvas/dispatch";
-import { deleteOp, moveOp } from "@/canvas/ops";
+import { bpmOp, deleteOp, moveOp } from "@/canvas/ops";
 
 
 import { play, stop } from "@/audio/strudel";
@@ -114,6 +114,7 @@ function Editor() {
         () => nodesReachingOutput(Object.values(doc.nodes), Object.values(doc.edges)),
         [doc],
     );
+    
     // the Strudel code for the whole graph; recompiled only when the doc changes
     const { code, issues } = useMemo(() => compile(doc), [doc]);
     const nodes =useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
@@ -134,6 +135,14 @@ function Editor() {
     const [bpmText, setBpmText] = useState(String(bpm));
     const typed = Number(bpmText);
     const bpmValid = bpmText !== "" && typed >= BPM_MIN && typed <= BPM_MAX;
+
+    // blur/Enter: send one op; if there's nothing to send or applyOp would reject it, put the doc's BPM back in the box
+    const commitBpm = () => {
+        const op = bpmOp(bpmText, bpm);
+        if (!op) { setBpmText(String(bpm)); return; }
+        dispatch(op); // dispatched even if it'll be rejected, so opError tells the user why
+        if (!applyOp(doc, op).ok) setBpmText(String(bpm));
+    };
 
     /* ---------- React Flow changes: UI state only, never the Doc ---------- */
     // "remove" changes are ignored here; deletes go through onDelete as ops
@@ -262,16 +271,10 @@ function Editor() {
                     BPM{" "}
                     <input type="number" min={BPM_MIN} max={BPM_MAX} value={bpmText}
                         aria-invalid={!bpmValid}
-                        onChange={(e) => {
-                            const t = e.target.value;
-                            setBpmText(t);
-                            const v = Number(t);
-                            // only valid values become an op; the doc keeps the last good BPM otherwise
-                            if (t !== "" && v >= BPM_MIN && v <= BPM_MAX) {
-                                dispatch({ type: "setSetting", opId: crypto.randomUUID(), patch: { bpm: v } });
-                            }
-                        }}
-                        onBlur={() => { if (!bpmValid) setBpmText(String(bpm)); }} />
+                        onChange={(e) => setBpmText(e.target.value)}
+                        onBlur={commitBpm}
+                        // Enter just blurs, so the op is sent from onBlur only (never twice)
+                        onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
                 </label>
                 <button onClick={onPlay}>▶ Play</button>
                 <button className="secondary" onClick={() => stop()}>■ Stop</button>

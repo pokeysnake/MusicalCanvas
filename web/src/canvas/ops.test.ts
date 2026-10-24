@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyDoc, OUTPUT_ID } from "@/model/doc";
 import { initialState, reducer } from "@/model/reducer";
 import type { Doc, GraphNode, Op } from "@/model/types";
-import { deleteOp, moveOp } from "./ops";
+import { bpmOp, deleteOp, moveOp } from "./ops";
 
 /* the gate: one user action = one op. These are the exact builders the drag-stop and delete handlers call. */
 
@@ -62,5 +62,31 @@ describe("one delete = one op", () => {
     expect(next.error).toBeNull();
     expect(Object.keys(next.doc.nodes).sort()).toEqual(["i", OUTPUT_ID]);
     expect(next.doc.edges).toEqual({});
+  });
+});
+
+describe("one BPM commit = one op", () => {
+  it("committing a new BPM sends ONE setSetting op that the reducer accepts", () => {
+    const op = bpmOp("140", 120);
+    expect(op).toMatchObject({ type: "setSetting", patch: { bpm: 140 } });
+    const next = reducer(initialState(startDoc()), op!);
+    expect(next.error).toBeNull();
+    expect(next.doc.settings.bpm).toBe(140);
+  });
+
+  it("committing the BPM that's already set sends no op", () => {
+    expect(bpmOp("120", 120)).toBeNull();
+  });
+
+  it("empty or non-numeric text sends no op (the box reverts instead)", () => {
+    expect(bpmOp("", 120)).toBeNull();
+    expect(bpmOp("abc", 120)).toBeNull();
+  });
+
+  it("out-of-range BPM still becomes an op, so applyOp is the one place that rejects it", () => {
+    const op = bpmOp("999", 120);
+    const next = reducer(initialState(startDoc()), op!);
+    expect(next.error).toBe("bpm must be 40-240");
+    expect(next.doc.settings.bpm).toBe(120);
   });
 });

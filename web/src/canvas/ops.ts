@@ -24,3 +24,11 @@ export function deleteOp(nodes: { id: string }[], edges: { id: string }[]): Op {
     edgeIds: edges.map((e) => e.id),
   };
 }
+
+/** BPM box blur/Enter: the typed text becomes one setSetting op, or null when there's nothing to send
+ *  (empty, not a number, or unchanged). The 40-240 range is left to applyOp so the rule lives in one place. */
+export function bpmOp(text: string, current: number): Op | null {
+  const bpm = Number(text);
+  if (text.trim() === "" || !Number.isFinite(bpm) || bpm === current) return null;
+  return { type: "setSetting", opId: crypto.randomUUID(), patch: { bpm } };
+}
