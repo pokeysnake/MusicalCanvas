@@ -1,0 +1,2 @@
+# look for our own packages (app/) from server/, so Ruff sorts `from app...` imports as first-party
+src = ["."]
