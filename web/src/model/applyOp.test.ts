@@ -139,6 +139,15 @@ describe("applyOp: rejections", () => {
     // NaN and numeric strings slip past < and > (both comparisons are false); a network op can carry either
     ["bpm that is NaN",                { type: "setSetting", opId: "x", patch: { bpm: NaN } },                    "bpm"],
     ["bpm sent as a string",           { type: "setSetting", opId: "x", patch: { bpm: "120" as unknown as number } }, "bpm"],
+    // every other number field gets the same check (Stage 5: ops arrive as JSON from other clients)
+    ["adding a node at a NaN position", add({ ...notes("n2"), position: { x: NaN, y: 0 } }),                      "position"],
+    ["adding a filter with a NaN value", add({ id: "f2", type: "filter", position: { x: 0, y: 0 }, data: { kind: "lpf", value: NaN, q: 0.7 } }), "value"],
+    ["adding a filter with a string q", add({ id: "f2", type: "filter", position: { x: 0, y: 0 }, data: { kind: "lpf", value: 800, q: "1" as unknown as number } }), "q"],
+    ["moving to a NaN position",       { type: "moveNodes", opId: "x", positions: { n: { x: 1, y: NaN } } },      "position"],
+    ["moving to Infinity",             { type: "moveNodes", opId: "x", positions: { n: { x: Infinity, y: 1 } } }, "position"],
+    ["a filter value that is NaN",     { type: "updateNodeData", opId: "x", id: "f", patch: { value: NaN } },     "value"],
+    ["a filter q sent as a string",    { type: "updateNodeData", opId: "x", id: "f", patch: { q: "2" as unknown as number } }, "q"],
+    ["an eq band that is NaN",         { type: "setSetting", opId: "x", patch: { eq: { low: NaN, mid: 0, high: 0 } } }, "eq"],
   ])("rejects %s", (_desc, op, reason) => {
     const why = mustReject(chainDoc(), op);
     expect(why).toContain(reason);

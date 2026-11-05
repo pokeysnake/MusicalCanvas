@@ -3,7 +3,10 @@ import path from "node:path";
 
 export default defineConfig({
   resolve: {
-    alias: { "@": path.resolve(__dirname, "src") },  // same @/ alias Next.js uses
+    alias: {
+      "@": path.resolve(__dirname, "src"),                 // same @/ alias Next.js uses
+      "@shared": path.resolve(__dirname, "../shared"),     // fixtures shared with the server
+    },
   },
   test: {
     environment: "node",   // model code is pure logic, no browser needed

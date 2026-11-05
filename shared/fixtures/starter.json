@@ -1,0 +1,9 @@
+[
+  { "type": "addNode", "opId": "starter-1", "node": { "id": "n1", "type": "notes", "position": { "x": 40, "y": 60 }, "data": { "name": "Melody", "text": "c4 e4 [c4,e4,g4] ~" } } },
+  { "type": "addNode", "opId": "starter-2", "node": { "id": "n2", "type": "instrument", "position": { "x": 420, "y": 60 }, "data": { "sound": "triangle", "muted": false, "solo": false } } },
+  { "type": "addNode", "opId": "starter-3", "node": { "id": "n3", "type": "filter", "position": { "x": 740, "y": 60 }, "data": { "kind": "lpf", "value": 800, "q": 0.7 } } },
+  { "type": "moveNodes", "opId": "starter-4", "positions": { "output": { "x": 1040, "y": 60 } } },
+  { "type": "connect", "opId": "starter-5", "source": "n1", "target": "n2" },
+  { "type": "connect", "opId": "starter-6", "source": "n2", "target": "n3" },
+  { "type": "connect", "opId": "starter-7", "source": "n3", "target": "output" }
+]

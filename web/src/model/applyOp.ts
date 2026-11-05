@@ -1,4 +1,4 @@
-import type { ApplyResult, Doc, GraphEdge, NodeType, Op } from "./types";
+import type { ApplyResult, Doc, GraphEdge, NodeType, Op, Position } from "./types";
 import { edgeId } from "./types";
 import { isValidPair, wouldCreateCycle } from "./graph";
 import { isSoundId } from "./sounds";
@@ -6,6 +6,17 @@ import { isSoundId } from "./sounds";
 // small helpers so every case reads cleanly
 const ok = (doc: Doc): ApplyResult => ({ ok: true, doc });
 const reject = (reason: string): ApplyResult => ({ ok: false, reason });
+
+/* ---------- number checks ----------
+   ops arrive as JSON from other clients (Stage 5), and NaN or "120" slip past < and > checks,
+   so every number field must be a real, finite number before anything else looks at it */
+const isNum = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+const badPosition = (p: Position | undefined) => !p || !isNum(p.x) || !isNum(p.y);
+
+/** node data fields that hold numbers (only filters have any today) */
+const NUMBER_FIELDS = ["value", "q"];
+const badNumberField = (data: object) =>
+  NUMBER_FIELDS.find((k) => k in data && !isNum((data as Record<string, unknown>)[k]));
 
 /** which data fields each node type is allowed to change */
 const EDITABLE_FIELDS: Record<NodeType, string[]> = {
@@ -29,6 +40,7 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       const ids = Object.keys(op.positions);
       if (ids.length === 0) return reject("no nodes to move");
       if (ids.some((id) => !doc.nodes[id])) return reject("node does not exist");
+      if (ids.some((id) => badPosition(op.positions[id]))) return reject("position must be finite numbers");
       const nodes = { ...doc.nodes };
       for (const id of ids) nodes[id] = { ...nodes[id], position: op.positions[id] };
       return ok({ ...doc, nodes });
@@ -46,6 +58,9 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
         return reject("a room has exactly one Output");
       if (op.node.type === "instrument" && !isSoundId(op.node.data.sound))
         return reject(`unknown sound: ${op.node.data.sound}`);
+      if (badPosition(op.node.position)) return reject("position must be finite numbers");
+      const badField = badNumberField(op.node.data);
+      if (badField) return reject(`${badField} must be a finite number`);
       return ok({ ...doc, nodes: { ...doc.nodes, [op.node.id]: op.node } });
     }
 
@@ -114,6 +129,8 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
         return reject(`${node.type} has no field(s): ${bad.join(", ")}`);
       if (op.patch.sound !== undefined && !isSoundId(op.patch.sound))
         return reject(`unknown sound: ${op.patch.sound}`);
+      const badField = badNumberField(op.patch);
+      if (badField) return reject(`${badField} must be a finite number`);
 
       const updated = {
         ...node,
@@ -129,8 +146,10 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
     case "setSetting": {
       const { bpm, eq } = op.patch;
       // typeof + isFinite first: NaN and "120" both pass < and >, and ops will arrive as JSON from other clients
-      if (bpm !== undefined && (typeof bpm !== "number" || !Number.isFinite(bpm) || bpm < 40 || bpm > 240))
+      if (bpm !== undefined && (!isNum(bpm) || bpm < 40 || bpm > 240))
         return reject("bpm must be 40-240");
+      if (eq && Object.values(eq).some((v) => !isNum(v)))
+        return reject("eq values must be finite numbers");
       return ok({
         ...doc,
         settings: {

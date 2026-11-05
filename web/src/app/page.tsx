@@ -20,8 +20,8 @@ import NotesNode from "@/nodes/NotesNode";
 import InstrumentNode from "@/nodes/InstrumentNode";
 import FilterNode from "@/nodes/FilterNode";
 import { FILTERS, type FilterKind } from "@/model/filters";
-import { edgeId, type Doc, type GraphNode, type Position } from "@/model/types";
-import { emptyDoc, OUTPUT_ID } from "@/model/doc";
+import type { GraphNode, Position } from "@/model/types";
+import { starterDoc } from "@/model/starter";
 import { DEFAULT_SOUND } from "@/model/sounds";
 import OutputNode from "@/nodes/OutputNode";
 import NotesEditor from "@/ui/NotesEditor";
@@ -30,22 +30,8 @@ import { issueText } from "@/canvas/issues";
 
 
 /* ---------- Starting graph (what's on the canvas at page load) ---------- */
-// built on emptyDoc() so the Output id and default settings match what the server creates in Stage 6
-const base = emptyDoc();
-const initialDoc: Doc = {
-    ...base,
-    nodes: {
-        n1: { id: "n1", type: "notes", position: { x: 40, y: 60 }, data: { name: "Melody", text: "c4 e4 [c4,e4,g4] ~" } },
-        n2: { id: "n2", type: "instrument", position: { x: 420, y: 60 }, data: { sound: DEFAULT_SOUND, muted: false, solo: false } },
-        n3: { id: "n3", type: "filter", position: { x: 740, y: 60 }, data: { kind: "lpf", value: 800, q: 0.7 } },
-        [OUTPUT_ID]: { ...base.nodes[OUTPUT_ID], position: { x: 1040, y: 60 } },
-    },
-    edges: {
-        [edgeId("n1", "n2")]: { id: edgeId("n1", "n2"), source: "n1", target: "n2" },
-        [edgeId("n2", "n3")]: { id: edgeId("n2", "n3"), source: "n2", target: "n3" },
-        [edgeId("n3", OUTPUT_ID)]: { id: edgeId("n3", OUTPUT_ID), source: "n3", target: OUTPUT_ID },
-    },
-};
+// the demo graph from shared/fixtures/starter.json, the same ops the server seeds a new room with
+const initialDoc = starterDoc();
 
 const nodeTypes = {
     notes: NotesNode,
