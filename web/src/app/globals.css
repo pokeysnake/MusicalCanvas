@@ -281,3 +281,7 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+.topbar .room-status { font-size: 12px; opacity: 0.7; }
+.topbar .room-status[data-status="open"] { color: var(--ok, #4ade80); opacity: 1; }
+.topbar .room-status[data-status="closed"] { color: var(--error); opacity: 1; }
