@@ -14,7 +14,9 @@ client = TestClient(app)
 
 # the same file the server seeds new rooms with (tests/ -> server/ -> repo root)
 STARTER = json.loads(
-    (Path(__file__).resolve().parents[2] / "shared" / "fixtures" / "starter.json").read_text(encoding="utf-8")
+    (
+        Path(__file__).resolve().parents[2] / "shared" / "fixtures" / "starter.json"
+    ).read_text(encoding="utf-8")
 )
 
 
@@ -25,7 +27,11 @@ def new_room() -> str:
 
 def op_msg(bpm: int, seq: int) -> dict:
     # a client -> server op message; any op works (the server doesn't look inside), setSetting is the shortest
-    return {"type": "op", "op": {"type": "setSetting", "opId": f"t{seq}", "patch": {"bpm": bpm}}, "clientSeq": seq}
+    return {
+        "type": "op",
+        "op": {"type": "setSetting", "opId": f"t{seq}", "patch": {"bpm": bpm}},
+        "clientSeq": seq,
+    }
 
 
 # TESTCLIENT CHEAT SHEET
@@ -51,7 +57,10 @@ def test_new_room_snapshot_is_the_starter():
 #    - compare the clientId in each snapshot
 def test_two_clients_get_different_ids():
     room = new_room()
-    with client.websocket_connect(f"/ws/{room}") as a, client.websocket_connect(f"/ws/{room}") as b:
+    with (
+        client.websocket_connect(f"/ws/{room}") as a,
+        client.websocket_connect(f"/ws/{room}") as b,
+    ):
         a_id = a.receive_json()["clientId"]
         b_id = b.receive_json()["clientId"]
         assert a_id != b_id
