@@ -13,7 +13,7 @@ type InstrumentNode = Extract<GraphNode, {type:"instrument"}>;
 type FilterNode = Extract<GraphNode, { type: "filter" }>
 
 //top to bottom by canvas y; ties broken id so the output never depends on insertion order
-function byPosition(a:GraphNode, b:GraphNode): number {
+export function byPosition(a:GraphNode, b:GraphNode): number {
     if(a.position.y !== b.position.y) return a.position.y - b.position.y;
     return a.id < b.id ? -1 : a.id > b.id ? 1 : 0;
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-    Background, Controls, ReactFlow, ReactFlowProvider, useReactFlow,
+    Background, Controls, NodeToolbar, ReactFlow, ReactFlowProvider, useReactFlow,
     type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
 } from "@xyflow/react";
 
@@ -13,6 +13,7 @@ import { initialState, reducer } from "@/model/reducer";
 import { emptyUi, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
 import { DispatchProvider } from "@/canvas/dispatch";
 import { bpmOp, deleteOp, moveOp } from "@/canvas/ops";
+import { dragHint, snapPositions } from "@/canvas/sequence";
 
 
 import { play, setVolume, stop } from "@/audio/strudel";
@@ -119,7 +120,14 @@ function Editor({ roomId }: { roomId: string | null }) {
     const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
     const [error, setError] = useState<string | null>(null);
-    const { screenToFlowPosition } = useReactFlow();
+    const { screenToFlowPosition, getNode } = useReactFlow();
+
+    // the node under the cursor during a drag (others may move with it); the tooltip sits on this one
+    const [leadId, setLeadId] = useState<string | null>(null);
+    const hint = useMemo(
+        () => (leadId && ui.drag[leadId] ? dragHint(doc, leadId, ui.drag) : null),
+        [doc, leadId, ui.drag],
+    );
 
     // which Notes node has the popup open; look it up in the doc each render so a deleted node closes it
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -174,15 +182,21 @@ function Editor({ roomId }: { roomId: string | null }) {
 
     // one moveNodes op for the whole drag (even with several nodes selected), and clear the overlay in
     // the same handler (React batches both, so no snap-back; if the op is rejected, clearing the
-    // overlay snaps the nodes back to their Doc positions)
+    // overlay snaps the nodes back to their Doc positions).
+    // Notes in a cat sequence snap into a tidy column in their new play order; the snap rides in the same op.
+    const onNodeDragStart = useCallback((_: unknown, node: Node) => setLeadId(node.id), []);
+
     const onNodeDragStop = useCallback((_: unknown, _node: Node, dragged: Node[]) => {
-        dispatch(moveOp(dragged));
+        const dropped = Object.fromEntries(dragged.map((n) => [n.id, n.position]));
+        const snap = snapPositions(doc, dropped, (id) => getNode(id)?.measured?.height);
+        dispatch(moveOp(dragged, snap));
+        setLeadId(null);
         setUi((prev) => {
             const drag = { ...prev.drag };
             for (const n of dragged) delete drag[n.id];
             return { ...prev, drag };
         });
-    }, [dispatch]);
+    }, [dispatch, doc, getNode]);
 
     /* ---------- Connections ---------- */
     const onConnect = useCallback((c: Connection) => {
@@ -341,7 +355,8 @@ function Editor({ roomId }: { roomId: string | null }) {
                         <ReactFlow
                             nodes={nodes} edges={edges} nodeTypes={nodeTypes}
                             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
-                            onNodeDragStop={onNodeDragStop} onNodeDoubleClick={onNodeDoubleClick}
+                            onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop}
+                            onNodeDoubleClick={onNodeDoubleClick}
                             zoomOnDoubleClick={false}
                             onBeforeDelete={onBeforeDelete} onDelete={onDelete}
                             onConnect={onConnect} isValidConnection={isValidConnection}
@@ -350,6 +365,13 @@ function Editor({ roomId }: { roomId: string | null }) {
                         >
                             <Background />
                             <Controls />
+                            {/* drag tooltip: where a Notes plays in its cat sequence, or why height doesn't matter */}
+                            {hint && leadId && (
+                                <NodeToolbar nodeId={leadId} isVisible
+                                    className={hint.reorder ? "drag-hint is-reorder" : "drag-hint"}>
+                                    {hint.text}
+                                </NodeToolbar>
+                            )}
                         </ReactFlow>
                     </div>
                     {tab === "strudel" && <pre className="code">{code}</pre>}

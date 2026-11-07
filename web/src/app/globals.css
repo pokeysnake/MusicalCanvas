@@ -285,3 +285,20 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
 .topbar .room-status { font-size: 12px; opacity: 0.7; }
 .topbar .room-status[data-status="open"] { color: var(--ok, #4ade80); opacity: 1; }
 .topbar .room-status[data-status="closed"] { color: var(--error); opacity: 1; }
+
+/* DRAG TOOLTIP (canvas/sequence.ts): shown above the node being dragged */
+.drag-hint {
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--tile-border);
+  background: var(--tile-raised);
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+.drag-hint.is-reorder {
+  border-color: var(--notes-chip-border);
+  background: var(--notes-tint);
+  color: var(--notes);
+}

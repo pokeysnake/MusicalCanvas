@@ -5,12 +5,14 @@ import type { Op, Position } from "@/model/types";
  * Pure so the gate can be tested without simulating a drag in a browser.
  */
 
-/** drag stop: every dragged node (one or many) goes into a single moveNodes op */
-export function moveOp(dragged: { id: string; position: Position }[]): Op {
+/** drag stop: every dragged node (one or many) goes into a single moveNodes op.
+ *  `snap` (from snapPositions) wins over where a node was dropped, and can move undragged neighbours too:
+ *  a reordered cat column is still one op */
+export function moveOp(dragged: { id: string; position: Position }[], snap: Record<string, Position> = {}): Op {
   return {
     type: "moveNodes",
     opId: crypto.randomUUID(),
-    positions: Object.fromEntries(dragged.map((n) => [n.id, n.position])),
+    positions: { ...Object.fromEntries(dragged.map((n) => [n.id, n.position])), ...snap },
   };
 }
 

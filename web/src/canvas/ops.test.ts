@@ -43,6 +43,12 @@ describe("one drag = one op", () => {
     expect(next.error).toBeNull();
     for (const d of dragged) expect(next.doc.nodes[d.id].position).toEqual(d.position);
   });
+
+  it("a snap overrides the drop spot and moves an undragged neighbour, still ONE op", () => {
+    const op = moveOp([{ id: "a", position: at(300, 50) }], { a: at(0, 84), b: at(0, 0) });
+    if (op.type !== "moveNodes") throw new Error("expected moveNodes");
+    expect(op.positions).toEqual({ a: at(0, 84), b: at(0, 0) });
+  });
 });
 
 describe("one delete = one op", () => {
