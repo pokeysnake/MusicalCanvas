@@ -1,0 +1,41 @@
+/* ---------- Themed node dropdowns (NodeSelect.tsx) ----------
+   Tailwind already maps shadcn's colours to our tokens (bg-popover = --panel, focus:bg-accent = --tile-raised,
+   border = --tile-border); this adds the node colour (--nc) and the sizes. */
+
+/* trigger: looks like the node's title text with a small chevron */
+.node-select__trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+.node-select__chevron { color: var(--muted); transition: transform 0.15s; }
+.node-select__trigger[data-state="open"] .node-select__chevron { transform: rotate(180deg); }
+
+.node-select {
+  min-width: 190px;
+  max-height: min(340px, var(--radix-dropdown-menu-content-available-height));
+  border-radius: 10px;
+  font-family: var(--font-sans);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  /* long lists (sounds) still scroll with the wheel / trackpad / arrow keys, but with no visible scrollbar,
+     so every dropdown looks the same */
+  scrollbar-width: none;
+}
+.node-select::-webkit-scrollbar { display: none; }
+.node-select__group {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nc);
+}
+.node-select__item { cursor: pointer; border-radius: 6px; }
+/* the tick on the current value, in the node colour */
+.node-select__item svg { color: var(--nc) !important; fill: var(--nc); }
+.node-select__name { flex: 1; }
+.node-select__hint { font: 600 10px var(--font-mono); color: var(--muted); }
