@@ -484,3 +484,142 @@ def test_the_starter_fixture_applies_cleanly():
     doc = apply_all(empty_doc(), STARTER)
     assert len(doc["nodes"]) == 4
     assert len(doc["edges"]) == 3
+
+
+# FX RACK: one node holding several effects (mirrors "applyOp: fx rack" in applyOp.test.ts)
+def fx(node_id: str, effects: list | None = None) -> dict:
+    return {
+        "id": node_id,
+        "type": "fx",
+        "position": {"x": 0, "y": 0},
+        "data": {
+            "effects": effects
+            if effects is not None
+            else [{"id": "e1", "kind": "lpf", "value": 800, "q": 0.7, "on": True}]
+        },
+    }
+
+
+def set_effects(node_id: str, effects) -> dict:
+    return {
+        "type": "updateNodeData",
+        "opId": op_id(),
+        "id": node_id,
+        "patch": {"effects": effects},
+    }
+
+
+def test_adds_an_fx_rack_and_wires_instrument_fx_output():
+    doc = apply_all(
+        empty_doc(),
+        [
+            add(notes("n")),
+            add(instrument("i")),
+            add(fx("x")),
+            connect("n", "i"),
+            connect("i", "x"),
+            connect("x", OUTPUT_ID),
+        ],
+    )
+    assert doc["nodes"]["x"]["type"] == "fx"
+    assert sorted(doc["edges"]) == sorted(["n->i", "i->x", f"x->{OUTPUT_ID}"])
+
+
+def test_an_empty_rack_is_allowed():
+    assert "x" in must_apply(empty_doc(), add(fx("x", [])))["nodes"]
+
+
+def test_fx_can_sit_next_to_filters():
+    doc = apply_all(
+        empty_doc(),
+        [
+            add(filt("f1")),
+            add(fx("x1")),
+            add(fx("x2")),
+            add(filt("f2")),
+            connect("f1", "x1"),
+            connect("x1", "x2"),
+            connect("x2", "f2"),
+        ],
+    )
+    assert len(doc["edges"]) == 3
+
+
+def test_notes_cannot_plug_straight_into_an_fx_rack():
+    doc = apply_all(empty_doc(), [add(notes("n")), add(fx("x"))])
+    assert must_reject(doc, connect("n", "x")) == "notes cannot connect to fx"
+
+
+def test_rejects_a_loop_through_fx_racks():
+    doc = apply_all(empty_doc(), [add(fx("a")), add(fx("b")), connect("a", "b")])
+    assert must_reject(doc, connect("b", "a")) == "would create a cycle"
+
+
+def test_update_node_data_replaces_the_whole_effects_list():
+    doc = must_apply(empty_doc(), add(fx("x")))
+    effects = [
+        {"id": "e1", "kind": "lpf", "value": 1200, "q": 0.7, "on": False},
+        {"id": "e2", "kind": "room", "value": 0.4, "on": True},
+    ]
+    assert must_apply(doc, set_effects("x", effects))["nodes"]["x"]["data"] == {
+        "effects": effects
+    }
+
+
+_ROW = {"id": "e1", "kind": "lpf", "value": 800, "on": True}
+
+
+@pytest.mark.parametrize(
+    ("effects", "reason"),
+    [
+        pytest.param("lpf", "effects must be a list", id="not a list"),
+        pytest.param([None], "each effect must be an object", id="row not an object"),
+        pytest.param([{**_ROW, "id": ""}], "each effect needs an id", id="empty id"),
+        pytest.param([_ROW, {**_ROW}], "duplicate effect id: e1", id="duplicate id"),
+        pytest.param(
+            [{**_ROW, "kind": "chorus"}], "unknown effect: chorus", id="unknown kind"
+        ),
+        pytest.param(
+            [{**_ROW, "value": math.nan}],
+            "effect value must be a finite number",
+            id="NaN value",
+        ),
+        pytest.param(
+            [{**_ROW, "value": "800"}],
+            "effect value must be a finite number",
+            id="string value",
+        ),
+        pytest.param(
+            [{**_ROW, "q": math.inf}],
+            "effect q must be a finite number",
+            id="infinite q",
+        ),
+        pytest.param(
+            [{**_ROW, "on": 1}], "effect on must be true or false", id="on not a bool"
+        ),
+    ],
+)
+def test_rejects_bad_effects_lists(effects, reason: str):
+    doc = must_apply(empty_doc(), add(fx("x")))
+    assert must_reject(doc, set_effects("x", effects)) == reason
+    assert must_reject(empty_doc(), add(fx("y", effects))) == reason
+
+
+def test_fx_only_takes_effects_and_other_nodes_dont_take_it():
+    doc = apply_all(empty_doc(), [add(fx("x")), add(filt("f"))])
+    patch_value = {
+        "type": "updateNodeData",
+        "opId": op_id(),
+        "id": "x",
+        "patch": {"value": 5},
+    }
+    assert must_reject(doc, patch_value) == "fx has no field(s): value"
+    assert must_reject(doc, set_effects("f", [])) == "filter has no field(s): effects"
+
+
+def test_fx_ops_never_modify_the_input_doc():
+    doc = must_apply(empty_doc(), add(fx("x")))
+    before = copy.deepcopy(doc)
+    apply_op(doc, set_effects("x", []))
+    apply_op(doc, set_effects("x", "bad"))
+    assert doc == before

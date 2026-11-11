@@ -5,8 +5,9 @@ from collections.abc import Iterable
 # which node types may connect to which
 VALID_TARGETS: dict[str, set[str]] = {
     "notes": {"instrument"},
-    "instrument": {"filter", "output"},
-    "filter": {"filter", "output"},
+    "instrument": {"filter", "fx", "output"},
+    "filter": {"filter", "fx", "output"},
+    "fx": {"filter", "fx", "output"},  # an FX rack can sit anywhere a Filter can
     "output": set(),
 }
 

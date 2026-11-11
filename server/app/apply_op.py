@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from app.doc import edge_id
+from app.filters import FILTER_KINDS
 from app.graph import is_valid_pair, would_create_cycle
 from app.sounds import is_sound_id
 
@@ -45,8 +46,37 @@ EDITABLE_FIELDS: dict[str, set[str]] = {
     "notes": {"name", "text"},
     "instrument": {"sound", "muted", "solo"},
     "filter": {"kind", "value", "q"},
+    "fx": {"effects"},
     "output": set(),
 }
+
+
+def bad_effects(effects: Any) -> str | None:
+    """an FX rack's effects list arrives as JSON, so check every row (None = fine, else why not).
+    Each row: a non-empty str id (unique in the rack), a known kind, a finite value, an optional finite q,
+    and on = True/False. Values aren't range-checked, same as Filter nodes. Mirrors badEffects in applyOp.ts."""
+    if not isinstance(effects, list):
+        return "effects must be a list"
+    ids: set[str] = set()
+    for e in effects:
+        if not isinstance(e, dict):
+            return "each effect must be an object"
+        eid = e.get("id")
+        if not isinstance(eid, str) or eid == "":
+            return "each effect needs an id"
+        if eid in ids:
+            return f"duplicate effect id: {eid}"
+        ids.add(eid)
+        kind = e.get("kind")
+        if not isinstance(kind, str) or kind not in FILTER_KINDS:
+            return f"unknown effect: {kind}"
+        if not is_num(e.get("value")):
+            return "effect value must be a finite number"
+        if "q" in e and not is_num(e["q"]):
+            return "effect q must be a finite number"
+        if not isinstance(e.get("on"), bool):
+            return "effect on must be true or false"
+    return None
 
 
 def apply_op(doc: dict, op: dict) -> ApplyResult:
@@ -92,6 +122,10 @@ def _apply(doc: dict, op: dict) -> ApplyResult:
                 return Rejected(f"unknown sound: {node['data'].get('sound')}")
             if bad_position(node["position"]):
                 return Rejected("position must be finite numbers")
+            if node["type"] == "fx" and (
+                why := bad_effects(node["data"].get("effects"))
+            ):
+                return Rejected(why)
             if bad := bad_number_field(node["data"]):
                 return Rejected(f"{bad} must be a finite number")
             return Ok({**doc, "nodes": {**nodes, node["id"]: node}})
@@ -151,6 +185,8 @@ def _apply(doc: dict, op: dict) -> ApplyResult:
                 return Rejected(f"{node['type']} has no field(s): {', '.join(bad)}")
             if "sound" in patch and not is_sound_id(patch["sound"]):
                 return Rejected(f"unknown sound: {patch['sound']}")
+            if "effects" in patch and (why := bad_effects(patch["effects"])):
+                return Rejected(why)
             if bad_field := bad_number_field(patch):
                 return Rejected(f"{bad_field} must be a finite number")
             updated = {**node, "data": {**node["data"], **patch}}
