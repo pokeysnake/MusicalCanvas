@@ -1,3 +1,4 @@
+import os
 from uuid import uuid4
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
@@ -10,9 +11,11 @@ from app.rooms import get_room
 app = FastAPI(title="Music Canvas Sync Server")
 
 # Dev-only: the Next.js app runs on :3000. Tighten for deploy (Stage 10).
+ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000").split(",")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
