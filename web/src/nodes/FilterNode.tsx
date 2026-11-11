@@ -4,7 +4,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import type { KeyboardEvent } from "react";
 import "./filter-node.css";
 
-import { FILTERS, type FilterKind } from "@/model/filters";
+import { FILTERS, Q, type FilterKind } from "@/model/filters";
 import { useUpdateNodeData } from "@/canvas/dispatch";
 import NodeSelect, { type SelectOption } from "@/ui/NodeSelect";
 
@@ -16,9 +16,7 @@ const KIND_OPTIONS: SelectOption[] = (Object.keys(FILTERS) as FilterKind[]).map(
   hint: FILTERS[k].unit || undefined,
 }));
 
-const Q_MIN = 0.1;
-const Q_MAX = 20;
-const Q_DEFAULT = 0.7;
+const { min: Q_MIN, max: Q_MAX, def: Q_DEFAULT } = Q;
 
 /* true when the typed text is a number inside [min, max] */
 const inRange = (text: string, min: number, max: number) => {

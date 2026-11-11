@@ -9,3 +9,6 @@ export const FILTERS = {
 } as const;
 
 export type FilterKind = keyof typeof FILTERS;
+
+/** Q (resonance) for the kinds with hasQ: the range the UI offers and the value a new filter starts with */
+export const Q = { min: 0.1, max: 20, def: 0.7 } as const;

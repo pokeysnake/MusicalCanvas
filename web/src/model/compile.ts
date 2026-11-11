@@ -4,7 +4,7 @@ import { nodesReachingOutput } from "./graph";
 import { parseNotes } from "./notes";
 import { getSound } from "./sounds";
 import { OUTPUT_ID } from "./doc";
-import { FILTERS, type FilterKind } from "./filters";
+import { FILTERS, Q, type FilterKind } from "./filters";
 
 export type CompileIssue = { nodeId: string; message: string };
 export type CompileResult = { code: string; issues: CompileIssue[] };
@@ -14,7 +14,7 @@ type FilterNode = Extract<GraphNode, { type: "filter" }>
 type FxNode = Extract<GraphNode, { type: "fx" }>;
 
 // Q for an FX row that doesn't carry one (same default the Filter node starts with)
-const DEFAULT_Q = 0.7;
+const DEFAULT_Q = Q.def;
 
 //top to bottom by canvas y; ties broken id so the output never depends on insertion order
 export function byPosition(a:GraphNode, b:GraphNode): number {

@@ -1,19 +1,21 @@
 "use client";
-import { useRef, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { ChevronDown, ChevronUp, SlidersHorizontal, X } from "lucide-react";
-import { FILTERS, type FilterKind } from "@/model/filters";
+import { FILTERS, Q, type FilterKind } from "@/model/filters";
 import type { FxEffect } from "@/model/types";
 import { useUpdateNodeData } from "@/canvas/dispatch";
 import {
-    DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger,
+    DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
+    DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { usePortalRoot } from "@/ui/portalRoot";
 import "./fx-rack.css";
 
 /**
  * FX rack: several effects in ONE node instead of a chain of Filter nodes (compiled top row first, see compile.ts).
- * Each row: a bypass light, the effect name, a slider, its value, and remove (on hover).
+ * Each row: a bypass light, the effect name, a slider, its value, and remove (on hover). Filters (hasQ) get a
+ * second, slimmer row underneath for Q (resonance).
  * "+ add effect" opens a themed dropdown; dropping an effect chip from the sidebar onto the rack also adds a row
  * (EditorApp onDrop). Collapsing folds it to one line of chips (LPF · GAIN · DLY · REV); that's UI state only.
  *
@@ -22,30 +24,37 @@ import "./fx-rack.css";
  */
 
 const SHORT: Record<FilterKind, string> = { lpf: "LPF", hpf: "HPF", bpf: "BPF", room: "REV", delay: "DLY", gain: "GAIN" };
-const DEFAULT_Q = 0.7;
-
-// Hz controls use a log scale so the slider isn't all bunched up at the low end
+// Hz and Q use a log scale (slider 0..STEPS) so the slider isn't all bunched up at the low end
 const STEPS = 1000;
+const toLog = (min: number, max: number, v: number) => (Math.log(v / min) / Math.log(max / min)) * STEPS;
+const fromLog = (min: number, max: number, s: number) => min * Math.pow(max / min, s / STEPS);
+
 function toSlider(kind: FilterKind, v: number): number {
     const f = FILTERS[kind];
-    if (f.unit !== "Hz") return v;
-    return (Math.log(v / f.min) / Math.log(f.max / f.min)) * STEPS;
+    return f.unit === "Hz" ? toLog(f.min, f.max, v) : v;
 }
 function fromSlider(kind: FilterKind, s: number): number {
     const f = FILTERS[kind];
-    if (f.unit !== "Hz") return s;
-    return Math.round(f.min * Math.pow(f.max / f.min, s / STEPS));
+    return f.unit === "Hz" ? Math.round(fromLog(f.min, f.max, s)) : s;
 }
 function show(kind: FilterKind, v: number): string {
     if (FILTERS[kind].unit !== "Hz") return v.toFixed(2);
     return v >= 1000 ? `${(v / 1000).toFixed(1)}k` : `${Math.round(v)}`;
 }
+const qFromSlider = (s: number) => Math.round(fromLog(Q.min, Q.max, s) * 10) / 10; // one decimal, like FilterNode
 
 /** a new row for `kind` with its default value (filters also get a default Q) */
 export function newEffect(kind: FilterKind): FxEffect {
     const f = FILTERS[kind];
-    return { id: crypto.randomUUID(), kind, value: f.def, on: true, ...(f.hasQ ? { q: DEFAULT_Q } : {}) };
+    return { id: crypto.randomUUID(), kind, value: f.def, on: true, ...(f.hasQ ? { q: Q.def } : {}) };
 }
+
+// the add menu, grouped like the Filter node's dropdown
+const KINDS = Object.keys(FILTERS) as FilterKind[];
+const MENU_GROUPS = [
+    { label: "Filters", kinds: KINDS.filter((k) => FILTERS[k].unit === "Hz") },
+    { label: "Effects", kinds: KINDS.filter((k) => FILTERS[k].unit !== "Hz") },
+];
 
 export default function FxRackNode({ id, data }: NodeProps) {
     const effects = (data.effects ?? []) as FxEffect[];
@@ -57,18 +66,31 @@ export default function FxRackNode({ id, data }: NodeProps) {
     const root = usePortalRoot();
     const [collapsed, setCollapsed] = useState(false); // UI only, never in the Doc
 
-    // slider drafts: rowId -> value while dragging; committed on release
+    // slider drafts while dragging, committed on release. Keyed "rowId:value" or "rowId:q"
+    type Field = "value" | "q";
     const [drafts, setDrafts] = useState<Record<string, number>>({});
-    const commit = (rowId: string) => {
-        const v = drafts[rowId];
+    const draftKey = (rowId: string, field: Field) => `${rowId}:${field}`;
+    const setDraft = (rowId: string, field: Field, v: number) =>
+        setDrafts((d) => ({ ...d, [draftKey(rowId, field)]: v }));
+    const commit = (rowId: string, field: Field) => {
+        const key = draftKey(rowId, field);
+        const v = drafts[key];
         if (v === undefined) return;
         setDrafts((d) => {
             const rest = { ...d };
-            delete rest[rowId];
+            delete rest[key];
             return rest;
         });
-        if (v !== effects.find((e) => e.id === rowId)?.value) patchRow(rowId, { value: v });
+        const row = effects.find((e) => e.id === rowId);
+        const current = field === "q" ? (row?.q ?? Q.def) : row?.value;
+        if (row && v !== current) patchRow(rowId, { [field]: v });
     };
+    // pointer up / key up / blur all mean "done dragging"
+    const commitOn = (rowId: string, field: Field) => ({
+        onPointerUp: () => commit(rowId, field),
+        onKeyUp: () => commit(rowId, field),
+        onBlur: () => commit(rowId, field),
+    });
 
     // highlight while an effect chip is dragged over the rack (counter, since dragenter/leave also fire on children)
     const depth = useRef(0);
@@ -110,9 +132,11 @@ export default function FxRackNode({ id, data }: NodeProps) {
                             const f = FILTERS[e.kind];
                             if (!f) return null; // unknown kind from a newer client: compile.ts reports it
                             const hz = f.unit === "Hz";
-                            const value = drafts[e.id] ?? e.value;
+                            const value = drafts[draftKey(e.id, "value")] ?? e.value;
+                            const q = drafts[draftKey(e.id, "q")] ?? e.q ?? Q.def;
                             return (
-                                <li key={e.id} className={"fx-rack__row" + (e.on ? "" : " is-off")}>
+                                <Fragment key={e.id}>
+                                <li className={"fx-rack__row" + (e.on ? "" : " is-off")}>
                                     <button type="button" className="fx-rack__led nodrag" aria-pressed={e.on}
                                         aria-label={`${f.label} ${e.on ? "on" : "bypassed"}`}
                                         title={e.on ? "On (click to bypass)" : "Bypassed (click to turn on)"}
@@ -121,17 +145,28 @@ export default function FxRackNode({ id, data }: NodeProps) {
                                     <input type="range" className="fx-rack__slider nodrag" aria-label={f.label}
                                         min={hz ? 0 : f.min} max={hz ? STEPS : f.max} step={hz ? 1 : f.step}
                                         value={toSlider(e.kind, value)}
-                                        onChange={(ev) => {
-                                            const v = fromSlider(e.kind, Number(ev.target.value));
-                                            setDrafts((d) => ({ ...d, [e.id]: v }));
-                                        }}
-                                        onPointerUp={() => commit(e.id)} onKeyUp={() => commit(e.id)} onBlur={() => commit(e.id)} />
+                                        onChange={(ev) => setDraft(e.id, "value", fromSlider(e.kind, Number(ev.target.value)))}
+                                        {...commitOn(e.id, "value")} />
                                     <span className="fx-rack__value">{show(e.kind, value)}{hz && <small>Hz</small>}</span>
                                     <button type="button" className="fx-rack__remove nodrag" aria-label={`Remove ${f.label}`}
                                         onClick={() => setEffects(effects.filter((x) => x.id !== e.id))}>
                                         <X size={12} />
                                     </button>
                                 </li>
+                                {/* filters: resonance on its own slim row, lined up under the main slider */}
+                                {f.hasQ && (
+                                    <li className={"fx-rack__row fx-rack__row--q" + (e.on ? "" : " is-off")}>
+                                        <span />
+                                        <span className="fx-rack__name">Q</span>
+                                        <input type="range" className="fx-rack__slider nodrag" aria-label={`${f.label} Q`}
+                                            min={0} max={STEPS} step={1} value={toLog(Q.min, Q.max, q)}
+                                            onChange={(ev) => setDraft(e.id, "q", qFromSlider(Number(ev.target.value)))}
+                                            {...commitOn(e.id, "q")} />
+                                        <span className="fx-rack__value">{q.toFixed(1)}</span>
+                                        <span />
+                                    </li>
+                                )}
+                                </Fragment>
                             );
                         })}
                     </ul>
@@ -139,15 +174,20 @@ export default function FxRackNode({ id, data }: NodeProps) {
                     <DropdownMenu>
                         <DropdownMenuTrigger className="fx-rack__add nodrag">+ add effect</DropdownMenuTrigger>
                         <DropdownMenuContent container={root} align="center" className="fx-menu">
-                            <DropdownMenuLabel className="fx-menu__label">Add effect</DropdownMenuLabel>
-                            <DropdownMenuSeparator />
-                            {(Object.keys(FILTERS) as FilterKind[]).map((k) => (
-                                <DropdownMenuItem key={k} className="fx-menu__item"
-                                    onSelect={() => setEffects([...effects, newEffect(k)])}>
-                                    <span className="fx-menu__dot" aria-hidden="true" />
-                                    <span className="fx-menu__name">{FILTERS[k].label}</span>
-                                    <span className="fx-menu__short">{SHORT[k]}</span>
-                                </DropdownMenuItem>
+                            {MENU_GROUPS.map((g, i) => (
+                                <DropdownMenuGroup key={g.label}>
+                                    {i > 0 && <DropdownMenuSeparator />}
+                                    <DropdownMenuLabel className="fx-menu__label">{g.label}</DropdownMenuLabel>
+                                    {g.kinds.map((k) => (
+                                        <DropdownMenuItem key={k} className="fx-menu__item"
+                                            onSelect={() => setEffects([...effects, newEffect(k)])}>
+                                            <span className="fx-menu__dot" aria-hidden="true" />
+                                            <span className="fx-menu__name">{FILTERS[k].label}</span>
+                                            {/* the Strudel function it becomes, e.g. Reverb -> .room */}
+                                            <span className="fx-menu__short">.{k}</span>
+                                        </DropdownMenuItem>
+                                    ))}
+                                </DropdownMenuGroup>
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>

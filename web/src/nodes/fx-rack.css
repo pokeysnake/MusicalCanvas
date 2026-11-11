@@ -74,6 +74,11 @@
   border-radius: 8px;
 }
 .fx-rack__row:hover { background: var(--tile-raised); }
+/* a filter's Q: a slim row tucked under its main row (same columns, so the sliders line up) */
+.fx-rack__row--q { height: 22px; margin-top: -4px; }
+.fx-rack__row--q .fx-rack__name,
+.fx-rack__row--q .fx-rack__value { font-size: 10px; color: var(--muted); }
+.fx-rack__row--q .fx-rack__name { text-align: right; }
 .fx-rack__row.is-off .fx-rack__name,
 .fx-rack__row.is-off .fx-rack__value,
 .fx-rack__row.is-off .fx-rack__slider { opacity: 0.4; }

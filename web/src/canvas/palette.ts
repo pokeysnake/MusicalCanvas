@@ -1,4 +1,4 @@
-import { FILTERS, type FilterKind } from "@/model/filters";
+import { FILTERS, Q, type FilterKind } from "@/model/filters";
 import { DEFAULT_SOUND } from "@/model/sounds";
 import type { GraphNode, Position } from "@/model/types";
 
@@ -30,7 +30,7 @@ export function newNode(item: PaletteItem, id: string, position: Position): Grap
         case "instrument": return { id, position, type: "instrument", data: { sound: DEFAULT_SOUND, muted: false, solo: false } };
         case "filter": {
             const k = item.kind ?? "lpf";
-            return { id, position, type: "filter", data: { kind: k, value: FILTERS[k].def, q: 0.7 } };
+            return { id, position, type: "filter", data: { kind: k, value: FILTERS[k].def, q: Q.def } };
         }
         case "fx": return { id, position, type: "fx", data: { effects: [] } }; // starts empty: add or drop effects in
     }
