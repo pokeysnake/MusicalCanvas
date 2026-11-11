@@ -26,12 +26,17 @@ def new_room() -> str:
 
 
 def op_msg(bpm: int, seq: int) -> dict:
-    # a client -> server op message; any op works (the server doesn't look inside), setSetting is the shortest
+    # a client -> server op message; setSetting is the shortest valid op (bpm must be between 40 and 240)
     return {
         "type": "op",
         "op": {"type": "setSetting", "opId": f"t{seq}", "patch": {"bpm": bpm}},
         "clientSeq": seq,
     }
+
+
+def raw_msg(op: dict, seq: int) -> dict:
+    # wraps any op valid or not in a client -> server envelope
+    return {"type": "op", "op": op, "clientSeq": seq}
 
 
 # TESTCLIENT CHEAT SHEET
@@ -168,3 +173,67 @@ def test_disconnect_does_not_break_the_room():
         msg = a.receive_json()
         assert msg["op"] == sent["op"]
         assert msg["version"] == len(STARTER) + 1
+
+
+# 9. an op apply_op rejects comes back to the sender as a reject
+#    - bpm 999 is outside 40-240
+#    - the reply is {type: "reject", clientSeq, reason} with the same reason apply_op gives
+def test_invalid_op_is_rejected_to_sender():
+    with client.websocket_connect(f"/ws/{new_room()}") as a:
+        a.receive_json()
+        a.send_json(op_msg(999, 1))
+        msg = a.receive_json()
+        assert msg == {"type": "reject", "clientSeq": 1, "reason": "bpm must be 40-240"}
+
+
+# 10. the reject goes to the sender only
+#     - a sends a bad op, then a good one
+#     - b's NEXT msg is the good op: if the reject had been broadcast, b would get it first
+def test_reject_is_not_broadcast():
+    room = new_room()
+    with client.websocket_connect(f"/ws/{room}") as a:
+        a.receive_json()
+        with client.websocket_connect(f"/ws/{room}") as b:
+            b.receive_json()
+            a.send_json(op_msg(999, 1))
+            good = op_msg(100, 2)
+            a.send_json(good)
+            msg = b.receive_json()
+            assert msg["type"] == "op"
+            assert msg["op"] == good["op"]
+
+
+# 11. a rejected op is not stored
+#     - after a reject, the next good op is version len(STARTER) + 1
+#     - a late joiner's snapshot doesnt contain the bad op
+def test_rejected_op_is_not_stored():
+    room = new_room()
+    with client.websocket_connect(f"/ws/{room}") as a:
+        a.receive_json()
+        a.send_json(op_msg(999, 1))
+        a.receive_json()  # the reject
+        a.send_json(op_msg(100, 2))
+        assert a.receive_json()["version"] == len(STARTER) + 1
+
+    with client.websocket_connect(f"/ws/{room}") as c:
+        snap = c.receive_json()
+        assert len(snap["ops"]) == len(STARTER) + 1
+        assert all(op.get("patch", {}).get("bpm") != 999 for op in snap["ops"])
+
+
+# 12. the server checks ops against the rooms CURRENT doc with the starter included
+#     - the starter already has the cable n1 -> n2
+#     - connecting it again is a duplicate which apply_op only knows if the room replayed the starter
+def test_ops_are_checked_against_the_room_doc():
+    with client.websocket_connect(f"/ws/{new_room()}") as a:
+        a.receive_json()
+        a.send_json(
+            raw_msg(
+                {"type": "connect", "opId": "c1", "source": "n1", "target": "n2"}, 1
+            )
+        )
+        assert a.receive_json() == {
+            "type": "reject",
+            "clientSeq": 1,
+            "reason": "duplicate connection",
+        }
