@@ -6,6 +6,7 @@
 
 /* ---------- Card ---------- */
 .notes-node {
+  position: relative; /* for the play-order badge */
   width: 320px;
   background: var(--tile);
   border: 1px solid var(--tile-border);
@@ -17,7 +18,7 @@
 /* React Flow adds .selected to the node wrapper */
 .react-flow__node.selected .notes-node {
   border-color: var(--notes);
-  box-shadow: 0 0 0 3px rgba(110, 224, 196, 0.2);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--notes) 20%, transparent);
 }
 
 /* Strip React Flow's own wrapper styling so only the card shows.
@@ -115,8 +116,8 @@
 
 .notes-node__step--chord {
   font-size: 11px;
-  background: rgba(110, 224, 196, 0.18);
-  border-color: rgba(110, 224, 196, 0.55);
+  background: color-mix(in srgb, var(--notes) 18%, transparent);
+  border-color: color-mix(in srgb, var(--notes) 55%, transparent);
 }
 
 .notes-node__step--rest {
@@ -150,7 +151,7 @@
 
 .notes-node__input:focus {
   border-color: var(--notes);
-  box-shadow: 0 0 0 3px rgba(110, 224, 196, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--notes) 18%, transparent);
 }
 
 .notes-node__input[aria-invalid="true"] {
@@ -170,3 +171,22 @@
   border: 2px solid var(--bg);
 }
 
+
+/* ---------- Play-order badge (only on Notes inside a cat group) ---------- */
+.notes-node__seq {
+  position: absolute;
+  top: -9px;
+  left: -9px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 10px;
+  background: var(--notes);
+  color: var(--bg);
+  font: 600 11px var(--font-mono);
+  box-shadow: 0 0 0 3px var(--bg);
+}

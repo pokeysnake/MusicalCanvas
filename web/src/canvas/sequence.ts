@@ -14,6 +14,10 @@ import type { Doc, GraphNode, Position } from "@/model/types";
 export const SEQ_GAP = 24;
 /** used when React Flow hasn't measured a node yet */
 const FALLBACK_HEIGHT = 80;
+const FALLBACK_WIDTH = 320; // .notes-node width
+/** space between a cat group's frame and its Notes; the top gets extra room for the label tab */
+export const GROUP_PAD = 16;
+export const GROUP_LABEL = 30; // tab (~18px at top: 8px) plus breathing room above the first Notes
 
 /** Notes ids wired into an instrument (unsorted) */
 function notesInto(doc: Doc, instrumentId: string): string[] {
@@ -79,6 +83,54 @@ export function dragHint(doc: Doc, id: string, drag: Record<string, Position>): 
     }
   }
   return { text: parts.join(" · "), reorder };
+}
+
+export type Box = { x: number; y: number; width: number; height: number };
+
+/** one cat sequence, ready to draw as a frame around its Notes */
+export type CatGroup = {
+  instrumentId: string;
+  label: string;   // the instrument's sound, e.g. "Triangle"
+  order: string[]; // Notes ids in play order
+  box: Box;        // the frame, in canvas coordinates
+  members: Box[];  // each Notes (same order), relative to the frame's top-left
+};
+
+/**
+ * Every instrument fed by 2+ Notes is a cat sequence; this gives the frame to draw around each one.
+ * Uses live drag positions, so the frame stretches and the order renumbers while dragging.
+ * Nothing here is stored in the Doc: it's always worked out from the wiring, so it can't go stale.
+ */
+export function catGroups(
+  doc: Doc,
+  drag: Record<string, Position>,
+  sizeOf: (id: string) => { width: number; height: number } | undefined,
+): CatGroup[] {
+  const groups: CatGroup[] = [];
+  for (const node of Object.values(doc.nodes)) {
+    if (node.type !== "instrument") continue;
+    const order = playOrder(doc, node.id, drag);
+    if (order.length < 2) continue;
+
+    const rects = order.map((id) => {
+      const pos = drag[id] ?? doc.nodes[id].position;
+      const size = sizeOf(id);
+      return { x: pos.x, y: pos.y, width: size?.width ?? FALLBACK_WIDTH, height: size?.height ?? FALLBACK_HEIGHT };
+    });
+    const left = Math.min(...rects.map((r) => r.x)) - GROUP_PAD;
+    const top = Math.min(...rects.map((r) => r.y)) - GROUP_PAD - GROUP_LABEL;
+    const right = Math.max(...rects.map((r) => r.x + r.width)) + GROUP_PAD;
+    const bottom = Math.max(...rects.map((r) => r.y + r.height)) + GROUP_PAD;
+
+    groups.push({
+      instrumentId: node.id,
+      label: instrumentLabel(doc, node.id),
+      order,
+      box: { x: left, y: top, width: right - left, height: bottom - top },
+      members: rects.map((r) => ({ ...r, x: r.x - left, y: r.y - top })),
+    });
+  }
+  return groups;
 }
 
 /**

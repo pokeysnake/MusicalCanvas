@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
     Background, Controls, NodeToolbar, ReactFlow, ReactFlowProvider, useReactFlow,
@@ -10,10 +10,10 @@ import {
 import { nodesReachingOutput } from "@/model/graph";
 import { applyOp } from "@/model/applyOp";
 import { initialState, reducer } from "@/model/reducer";
-import { emptyUi, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
+import { emptyUi, GROUP_PREFIX, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
 import { DispatchProvider } from "@/canvas/dispatch";
 import { bpmOp, deleteOp, moveOp } from "@/canvas/ops";
-import { dragHint, snapPositions } from "@/canvas/sequence";
+import { catGroups, dragHint, snapPositions } from "@/canvas/sequence";
 
 
 import { play, setVolume, stop } from "@/audio/strudel";
@@ -21,12 +21,17 @@ import { play, setVolume, stop } from "@/audio/strudel";
 import NotesNode from "@/nodes/NotesNode";
 import InstrumentNode from "@/nodes/InstrumentNode";
 import FilterNode from "@/nodes/FilterNode";
-import { FILTERS, type FilterKind } from "@/model/filters";
-import type { GraphNode, Op, Position } from "@/model/types";
+import FxRackNode, { newEffect } from "@/nodes/FxRackNode";
+import type { Op, Position } from "@/model/types";
+import { DRAG_TYPE, newNode, PALETTE_FILTERS, PALETTE_NODES, type PaletteItem } from "@/canvas/palette";
 import { starterDoc } from "@/model/starter";
-import { DEFAULT_SOUND } from "@/model/sounds";
 import OutputNode from "@/nodes/OutputNode";
-import NotesEditor from "@/ui/NotesEditor";
+import CatGroupNode from "@/nodes/CatGroupNode";
+import CableEdge from "@/canvas/CableEdge";
+import NotesEditor, { type Rect } from "@/ui/NotesEditor";
+import ShareButton from "@/ui/ShareButton";
+import GooButton from "@/ui/GooButton";
+import { Play, Square } from "lucide-react";
 import { compile } from "@/model/compile";
 import { issueText } from "@/canvas/issues";
 import { useRoomSocket } from "@/sync/useRoomSocket";
@@ -41,38 +46,11 @@ const nodeTypes = {
     instrument: InstrumentNode,
     filter: FilterNode,
     output: OutputNode,
+    fx: FxRackNode, // several effects in one node
+    catGroup: CatGroupNode, // frame behind a cat sequence; drawn from the wiring, not stored in the Doc
 }; // declared OUTSIDE the component so React Flow doesn't remount nodes every render
+const edgeTypes = { cable: CableEdge }; // every wire is a patch cable (canvas/CableEdge.tsx)
 
-
-/* ---------- Palette (the menu of things you can drag onto the canvas) ---------- */
-// no Output chip: every room starts with exactly one and it can't be deleted, so adding one is always rejected
-type PaletteItem = {
-    type: "notes" | "instrument" | "filter";
-    kind?: FilterKind;   // only for filters
-    label: string;
-};
-
-const PALETTE_NODES: PaletteItem[] = [
-    { type: "notes", label: "Notes" },
-    { type: "instrument", label: "Instrument" },
-];
-
-// built from the FILTERS table, so a new filter type gets a chip automatically
-const PALETTE_FILTERS: PaletteItem[] = (Object.keys(FILTERS) as FilterKind[]).map((k) => ({
-    type: "filter", kind: k, label: FILTERS[k].label,
-}));
-
-// a freshly dropped node with its starting data (typed, so addNode gets a valid GraphNode)
-function newNode(item: PaletteItem, id: string, position: Position): GraphNode {
-    switch (item.type) {
-        case "notes": return { id, position, type: "notes", data: { name: "New melody", text: "c4 e4 g4 ~" } };
-        case "instrument": return { id, position, type: "instrument", data: { sound: DEFAULT_SOUND, muted: false, solo: false } };
-        case "filter": {
-            const k = item.kind ?? "lpf";
-            return { id, position, type: "filter", data: { kind: k, value: FILTERS[k].def, q: 0.7 } };
-        }
-    }
-}
 
 /** new Set with id added/removed; returns the same set when nothing changes (avoids a re-render) */
 function withSelection(set: ReadonlySet<string>, id: string, on: boolean): ReadonlySet<string> {
@@ -81,8 +59,6 @@ function withSelection(set: ReadonlySet<string>, id: string, on: boolean): Reado
     if (on) next.add(id); else next.delete(id);
     return next;
 }
-
-const DRAG_TYPE = "application/musicalcanvas"; // custom type so random drags (text, files) are ignored
 
 
 /* ---------- BPM limits ---------- */
@@ -104,7 +80,6 @@ function Editor({ roomId }: { roomId: string | null }) {
     const { status, send } = useRoomSocket(roomId, apply);
     const dispatch = useCallback((op: Op) => (roomId ? send(op) : apply(op)), [roomId, send, apply]);
     const router = useRouter();
-    const [copied, setCopied] = useState(false);
     const [ui, setUi] = useState<UiState>(emptyUi);
 
     // reachability only depends on the doc, so drag frames skip the search
@@ -116,7 +91,9 @@ function Editor({ roomId }: { roomId: string | null }) {
     // the Strudel code for the whole graph; recompiled only when the doc changes
     const { code, issues } = useMemo(() => compile(doc), [doc]);
     const issueLine = issues.map((i) => issueText(doc, i)).join(" · ");
-    const nodes = useMemo(() => toFlowNodes(doc, ui, live), [doc, ui, live]);
+    // cat sequences to frame; uses live drag positions so the frame stretches and renumbers mid-drag
+    const groups = useMemo(() => catGroups(doc, ui.drag, (id) => ui.dims[id]), [doc, ui.drag, ui.dims]);
+    const nodes = useMemo(() => toFlowNodes(doc, ui, live, groups), [doc, ui, live, groups]);
     const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
     const [error, setError] = useState<string | null>(null);
@@ -130,10 +107,14 @@ function Editor({ roomId }: { roomId: string | null }) {
     );
 
     // which Notes node has the popup open; look it up in the doc each render so a deleted node closes it
-    const [editingId, setEditingId] = useState<string | null>(null);
-    const editing = editingId ? doc.nodes[editingId] : undefined;
-    const onNodeDoubleClick = useCallback((_: unknown, node: Node) => {
-        if (node.type === "notes") setEditingId(node.id);
+    // (also remembers where the node was on screen, so the popup can grow out of it)
+    const [editingAt, setEditingAt] = useState<{ id: string; from: Rect | null } | null>(null);
+    const editing = editingAt ? doc.nodes[editingAt.id] : undefined;
+    const onNodeDoubleClick = useCallback((e: React.MouseEvent, node: Node) => {
+        if (node.type !== "notes") return;
+        const el = (e.target as Element).closest(".react-flow__node");
+        const r = el?.getBoundingClientRect();
+        setEditingAt({ id: node.id, from: r ? { top: r.top, left: r.left, width: r.width, height: r.height } : null });
     }, []);
 
     /* BPM: a local draft only while typing (same pattern as FilterNode). When not typing (draft = null) the box
@@ -153,12 +134,24 @@ function Editor({ roomId }: { roomId: string | null }) {
     };
 
     /* ---------- React Flow changes: UI state only, never the Doc ---------- */
+    // Dragging a cat group by its tab moves all its Notes as one column: one moveNodes op on drop, no snap.
+    // Holds the frame's start position and each member's start position for the drag in progress.
+    const frameDrag = useRef<{ id: string; start: Position; members: Record<string, Position> } | null>(null);
+
     // "remove" changes are ignored here; deletes go through onDelete as ops
     const onNodesChange = useCallback((changes: NodeChange[]) => {
         setUi((prev) => {
             let { drag, selected, dims } = prev;
             for (const c of changes) {
-                if (c.type === "position" && c.position) {
+                // a cat group frame being dragged by its tab: move every Notes in it by the same amount
+                // (the frame itself isn't stored; it's redrawn around the moved Notes)
+                if (c.type === "position" && c.position && c.id.startsWith(GROUP_PREFIX)) {
+                    const fd = frameDrag.current;
+                    if (fd?.id !== c.id) continue;
+                    const dx = c.position.x - fd.start.x, dy = c.position.y - fd.start.y;
+                    drag = { ...drag };
+                    for (const [id, p] of Object.entries(fd.members)) drag[id] = { x: p.x + dx, y: p.y + dy };
+                } else if (c.type === "position" && c.position) {
                     drag = { ...drag, [c.id]: c.position };
                 } else if (c.type === "dimensions" && c.dimensions) {
                     dims = { ...dims, [c.id]: c.dimensions };
@@ -184,9 +177,33 @@ function Editor({ roomId }: { roomId: string | null }) {
     // the same handler (React batches both, so no snap-back; if the op is rejected, clearing the
     // overlay snaps the nodes back to their Doc positions).
     // Notes in a cat sequence snap into a tidy column in their new play order; the snap rides in the same op.
-    const onNodeDragStart = useCallback((_: unknown, node: Node) => setLeadId(node.id), []);
+    const onNodeDragStart = useCallback((_: unknown, node: Node) => {
+        if (node.id.startsWith(GROUP_PREFIX)) {
+            const g = groups.find((x) => GROUP_PREFIX + x.instrumentId === node.id);
+            if (g) {
+                const members = Object.fromEntries(g.order.map((id) => [id, doc.nodes[id].position]));
+                frameDrag.current = { id: node.id, start: node.position, members };
+            }
+            return; // no drag tooltip for the frame
+        }
+        setLeadId(node.id);
+    }, [groups, doc]);
 
-    const onNodeDragStop = useCallback((_: unknown, _node: Node, dragged: Node[]) => {
+    const onNodeDragStop = useCallback((_: unknown, node: Node, dragged: Node[]) => {
+        const fd = frameDrag.current;
+        if (fd && node.id === fd.id) {
+            frameDrag.current = null;
+            const dx = node.position.x - fd.start.x, dy = node.position.y - fd.start.y;
+            const moved = Object.entries(fd.members).map(([id, p]) => ({ id, position: { x: p.x + dx, y: p.y + dy } }));
+            if (dx !== 0 || dy !== 0) dispatch(moveOp(moved));
+            setUi((prev) => {
+                const drag = { ...prev.drag };
+                for (const id of [fd.id, ...Object.keys(fd.members)]) delete drag[id];
+                return { ...prev, drag };
+            });
+            return;
+        }
+
         const dropped = Object.fromEntries(dragged.map((n) => [n.id, n.position]));
         const snap = snapPositions(doc, dropped, (id) => getNode(id)?.measured?.height);
         dispatch(moveOp(dragged, snap));
@@ -279,11 +296,22 @@ function Editor({ roomId }: { roomId: string | null }) {
 
         const item = JSON.parse(raw) as PaletteItem;
 
+        // an effect chip dropped ON an FX rack becomes a new row in that rack (one updateNodeData op)
+        const rackId = (e.target as Element).closest(".react-flow__node-fx")?.getAttribute("data-id");
+        const rack = rackId ? doc.nodes[rackId] : undefined;
+        if (rack?.type === "fx" && item.type === "filter" && item.kind) {
+            dispatch({
+                type: "updateNodeData", opId: crypto.randomUUID(), id: rack.id,
+                patch: { effects: [...rack.data.effects, newEffect(item.kind)] },
+            });
+            return;
+        }
+
         // screen pixels -> canvas coordinates (accounts for pan + zoom)
         const position = screenToFlowPosition({ x: e.clientX, y: e.clientY });
 
         dispatch({ type: "addNode", opId: crypto.randomUUID(), node: newNode(item, crypto.randomUUID(), position) });
-    }, [screenToFlowPosition, dispatch]);
+    }, [screenToFlowPosition, dispatch, doc]);
 
 
     /* ---------- JSX ---------- */
@@ -308,8 +336,13 @@ function Editor({ roomId }: { roomId: string | null }) {
                             // Enter just blurs, so the op is sent from onBlur only (never twice)
                             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
                     </label>
-                    <button onClick={onPlay}>▶ Play</button>
-                    <button className="secondary" onClick={onStop}>■ Stop</button>
+                    {/* squishy buttons; Play gently breathes while the song plays */}
+                    <GooButton onClick={onPlay} color="var(--accent)" ink="var(--accent-ink)" active={playing}>
+                        <Play size={14} fill="currentColor" /> Play
+                    </GooButton>
+                    <GooButton onClick={onStop} color="var(--tile-border)" ink="var(--text)">
+                        <Square size={12} fill="currentColor" /> Stop
+                    </GooButton>
                     {/* per-listener volume: local, never an op, so it isn't shared with collaborators */}
                     <label className="vol">
                         Vol
@@ -323,18 +356,8 @@ function Editor({ roomId }: { roomId: string | null }) {
                             }} />
                     </label>
                     {/* sharing: solo mode offers a new room; inside a room, show the connection and a copy-link button */}
-                    {roomId ? (
-                        <>
-                            <span className="room-status" data-status={status}>{status}</span>
-                            <button className="secondary" onClick={() => {
-                                void navigator.clipboard.writeText(window.location.href);
-                                setCopied(true);
-                                setTimeout(() => setCopied(false), 1500);
-                            }}>{copied ? "Copied" : "Copy link"}</button>
-                        </>
-                    ) : (
-                        <button className="secondary" onClick={() => router.push(`/room/${crypto.randomUUID()}`)}>Share</button>
-                    )}
+                    {roomId && <span className="room-status" data-status={status}>{status}</span>}
+                    <ShareButton roomId={roomId} onShare={() => router.push(`/room/${crypto.randomUUID()}`)} />
                     {/* three independent sources, so one can never hide another:
                         compile issues (the song still plays without those nodes), a rejected op, and playback */}
                     <div className="errors">
@@ -353,7 +376,7 @@ function Editor({ roomId }: { roomId: string | null }) {
                     {/* Canvas stays mounted and is only hidden, so zoom/pan survive tab switches */}
                     <div className="canvas" style={{ display: tab === "graph" ? "block" : "none" }}>
                         <ReactFlow
-                            nodes={nodes} edges={edges} nodeTypes={nodeTypes}
+                            nodes={nodes} edges={edges} nodeTypes={nodeTypes} edgeTypes={edgeTypes}
                             onNodesChange={onNodesChange} onEdgesChange={onEdgesChange}
                             onNodeDragStart={onNodeDragStart} onNodeDragStop={onNodeDragStop}
                             onNodeDoubleClick={onNodeDoubleClick}
@@ -383,7 +406,7 @@ function Editor({ roomId }: { roomId: string | null }) {
 
                     <h4>Nodes</h4>
                     {PALETTE_NODES.map((item) => (
-                        <div key={item.type} className="chip" draggable
+                        <div key={item.type} className="chip" data-type={item.type} draggable
                             onDragStart={(e) => onDragStart(e, item)}>
                             {item.label}
                         </div>
@@ -391,7 +414,7 @@ function Editor({ roomId }: { roomId: string | null }) {
 
                     <h4>Filters</h4>
                     {PALETTE_FILTERS.map((item) => (
-                        <div key={item.kind} className="chip" draggable
+                        <div key={item.kind} className="chip" data-type="filter" draggable
                             onDragStart={(e) => onDragStart(e, item)}>
                             {item.label}
                         </div>
@@ -406,7 +429,7 @@ function Editor({ roomId }: { roomId: string | null }) {
                 {/* outside <ReactFlow>, so typing in it never reaches the canvas */}
                 {editing?.type === "notes" && (
                     <NotesEditor key={editing.id} nodeId={editing.id} name={editing.data.name} text={editing.data.text}
-                        onClose={() => setEditingId(null)} />
+                        from={editingAt?.from ?? null} onClose={() => setEditingAt(null)} />
                 )}
             </div>
         </DispatchProvider>

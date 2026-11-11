@@ -40,7 +40,7 @@
 /* selected: neutral white outline (Output has no accent color) */
 .react-flow__node.selected .output-node {
   border-color: var(--text);
-  box-shadow: 0 0 0 3px rgba(232, 234, 237, 0.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--output) 15%, transparent);
 }
 
 /* ---------- Icon ---------- */

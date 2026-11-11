@@ -3,7 +3,7 @@ import { applyOp } from "@/model/applyOp";
 import { compile } from "@/model/compile";
 import { emptyDoc, OUTPUT_ID } from "@/model/doc";
 import type { Doc, GraphNode, Op } from "@/model/types";
-import { dragHint, ordinal, playOrder, SEQ_GAP, snapPositions } from "./sequence";
+import { catGroups, dragHint, GROUP_LABEL, GROUP_PAD, ordinal, playOrder, SEQ_GAP, snapPositions } from "./sequence";
 
 const at = (x: number, y: number) => ({ x, y });
 const notes = (id: string, y: number, text = "c4"): GraphNode =>
@@ -128,5 +128,47 @@ describe("snapPositions", () => {
       wire("a", "i"), wire("b", "i"), wire("b", "j"),
     ]);
     expect(snapPositions(doc, { a: at(40, 200) }, height)).toEqual({});
+  });
+});
+
+describe("catGroups", () => {
+  const size = () => ({ width: 300, height: H });
+
+  it("frames a sequence with padding and room for the label", () => {
+    const [g] = catGroups(seqDoc(), {}, size);
+    expect(g.instrumentId).toBe("i");
+    expect(g.label).toBe("Triangle");
+    expect(g.order).toEqual(["a", "b", "c"]);
+    // notes span x 40..340, y 0..260
+    expect(g.box).toEqual({
+      x: 40 - GROUP_PAD,
+      y: 0 - GROUP_PAD - GROUP_LABEL,
+      width: 300 + 2 * GROUP_PAD,
+      height: 200 + H + 2 * GROUP_PAD + GROUP_LABEL,
+    });
+  });
+
+  it("gives member boxes relative to the frame, in play order", () => {
+    const [g] = catGroups(seqDoc(), {}, size);
+    expect(g.members[0]).toEqual({ x: GROUP_PAD, y: GROUP_PAD + GROUP_LABEL, width: 300, height: H });
+    expect(g.members[2].y).toBe(GROUP_PAD + GROUP_LABEL + 200);
+  });
+
+  it("follows live drag positions (order and frame)", () => {
+    const [g] = catGroups(seqDoc(), { a: at(40, 500) }, size);
+    expect(g.order).toEqual(["b", "c", "a"]);
+    expect(g.box.y).toBe(100 - GROUP_PAD - GROUP_LABEL);
+    expect(g.box.height).toBe(400 + H + 2 * GROUP_PAD + GROUP_LABEL);
+  });
+
+  it("falls back to a default size before React Flow measures", () => {
+    const [g] = catGroups(seqDoc(), {}, () => undefined);
+    expect(g.members[0].width).toBe(320);
+    expect(g.members[0].height).toBe(80);
+  });
+
+  it("skips instruments with fewer than two Notes", () => {
+    const doc = build([add(notes("a", 0)), add(inst("i")), wire("a", "i")]);
+    expect(catGroups(doc, {}, size)).toEqual([]);
   });
 });

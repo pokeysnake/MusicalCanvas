@@ -8,6 +8,12 @@ export default function NotesNode({ data }: NodeProps) {
 
     return (
         <div className="notes-node">
+            {/* in a cat sequence: which one plays when (set by toFlowNodes from catGroups) */}
+            {typeof data.seq === "number" && (
+                <span className="notes-node__seq" title={`Plays ${data.seq === 1 ? "first" : `#${data.seq}`} in its sequence`}>
+                    {data.seq}
+                </span>
+            )}
             <div className="notes-node__header">
                 <div className="notes-node__titles">
                     <span className="notes-node__eyebrow">Notes</span>

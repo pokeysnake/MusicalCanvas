@@ -1,0 +1,79 @@
+/* =====================================================================================
+   Theme layer on top of the node components (colours themselves are tokens in globals.css :root).
+   Chosen direction: "Warm Analog" (design/music-theme-directions.md). Built theme-ready:
+   - shared patterns below apply to every theme;
+   - finishes that are specific to a look sit under html[data-theme="analog"] (set in layout.tsx),
+     so another theme could be added later with its own block.
+   Selectors start with `html` on purpose: it out-ranks the node files' own rules (.notes-node etc.),
+   which load after this file.
+   ===================================================================================== */
+
+/* ---------- Each node type's own colour (--nc) ---------- */
+html .notes-node { --nc: var(--notes); }
+html .instrument-node { --nc: var(--instrument); }
+html .filter-node { --nc: var(--filter); }
+html .output-node { --nc: var(--output); }
+html .fx-rack { --nc: var(--filter); } /* a box of filters */
+
+/* ---------- Faceplate: coloured strip along the top, tinted border, a little depth ---------- */
+html :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
+  background-color: var(--tile);
+  border-color: color-mix(in srgb, var(--nc) 38%, var(--tile-border));
+  box-shadow: inset 0 3px 0 var(--nc), 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+html .react-flow__node.selected :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
+  border-color: var(--nc);
+  box-shadow: inset 0 3px 0 var(--nc), 0 0 0 3px color-mix(in srgb, var(--nc) 30%, transparent), 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+/* eyebrow labels ("NOTES", "FILTER", ...) in the node's colour */
+html :is(.notes-node__eyebrow, .instrument-node__eyebrow, .filter-node__eyebrow, .output-node__eyebrow) {
+  color: var(--nc);
+}
+
+/* ---------- Handles become jack sockets: dark hole ringed in the node colour ---------- */
+html :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) .react-flow__handle {
+  width: 14px;
+  height: 14px;
+  background: radial-gradient(circle, #050608 0 38%, color-mix(in srgb, var(--nc) 70%, #000) 42% 100%);
+  border: 2px solid var(--nc);
+}
+
+/* ---------- Sidebar palette chips: a dot in the colour of the node they create ---------- */
+html .chip[data-type="notes"] { --nc: var(--notes); }
+html .chip[data-type="instrument"] { --nc: var(--instrument); }
+html .chip[data-type="filter"],
+html .chip[data-type="fx"] { --nc: var(--filter); }
+html .side .chip::before {
+  content: "";
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--nc, var(--muted));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc, var(--muted)) 22%, transparent);
+}
+/* the FX Rack chip gets a square "pedal" mark instead of a dot */
+html .side .chip[data-type="fx"]::before { border-radius: 3px; }
+
+/* ---------- Patch cables (canvas/CableEdge.tsx) ---------- */
+html .cable path { fill: none; stroke-linecap: round; }
+html .cable__shadow { stroke: rgba(0, 0, 0, 0.5); stroke-width: 9; }
+html .cable__core { stroke-width: 5; transition: stroke-width 0.15s; }
+html .cable__sheen { stroke: rgba(255, 255, 255, 0.3); stroke-width: 1.2; transform: translateY(-1.2px); }
+html .cable__plug { stroke: rgba(0, 0, 0, 0.5); stroke-width: 1; }
+html .cable.is-selected .cable__core { stroke-width: 7; }
+
+/* =====================================================================================
+   Warm Analog finishes
+   ===================================================================================== */
+
+/* felt / paper grain on every node (SVG noise, no image file) */
+html[data-theme="analog"] :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.85  0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    linear-gradient(180deg, rgba(255, 240, 220, 0.04), transparent 50%);
+}
+
+/* braided cloth cables (tight dash pattern), only a faint sheen */
+html[data-theme="analog"] .cable__core { stroke-dasharray: 6 2.5; stroke-linecap: butt; }
+html[data-theme="analog"] .cable__sheen { stroke: rgba(255, 245, 230, 0.12); }

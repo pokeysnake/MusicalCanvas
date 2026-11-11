@@ -6,6 +6,15 @@ import "./filter-node.css";
 
 import { FILTERS, type FilterKind } from "@/model/filters";
 import { useUpdateNodeData } from "@/canvas/dispatch";
+import NodeSelect, { type SelectOption } from "@/ui/NodeSelect";
+
+// built once from the FILTERS table; frequency filters vs level/space effects, with each one's unit as a hint
+const KIND_OPTIONS: SelectOption[] = (Object.keys(FILTERS) as FilterKind[]).map((k) => ({
+  value: k,
+  label: FILTERS[k].label,
+  group: FILTERS[k].unit === "Hz" ? "Filters" : "Effects",
+  hint: FILTERS[k].unit || undefined,
+}));
 
 const Q_MIN = 0.1;
 const Q_MAX = 20;
@@ -72,16 +81,9 @@ export default function FilterNode({ id, data }: NodeProps) {
         </div>
         <div className="filter-node__titles">
           <span className="filter-node__eyebrow">Filter</span>
-          <select
-            className="filter-node__kind nodrag"
-            aria-label="Filter type"
-            value={kind}
-            onChange={(e) => changeKind(e.target.value as FilterKind)}
-          >
-            {Object.entries(FILTERS).map(([key, f]) => (
-              <option key={key} value={key}>{f.label}</option>
-            ))}
-          </select>
+          {/* themed dropdown (the native select's menu is always white) */}
+          <NodeSelect className="filter-node__kind" label="Filter type" color="var(--filter)"
+            value={kind} options={KIND_OPTIONS} onChange={(v) => changeKind(v as FilterKind)} />
         </div>
       </div>
 

@@ -1,0 +1,77 @@
+/* ---------- Cat group frame (CatGroupNode.tsx) ---------- */
+
+/* display only: let clicks and drags go through to the canvas / nodes underneath */
+.react-flow__node-catGroup {
+  pointer-events: none !important;
+}
+
+.cat-group {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  border: 1px solid color-mix(in srgb, var(--instrument) 45%, transparent); /* --instrument, faded */
+  background: color-mix(in srgb, var(--instrument) 6%, transparent);
+  border-radius: 20px;
+}
+
+/* the label tab is the group's drag handle, so it (alone) takes clicks */
+.cat-group__tab {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%); /* centred along the top edge */
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px 2px 4px;
+  border-radius: 6px;
+  pointer-events: auto;
+  cursor: grab;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--instrument);
+  white-space: nowrap;
+}
+.cat-group__tab:hover { background: color-mix(in srgb, var(--instrument) 12%, transparent); }
+.react-flow__node-catGroup.dragging .cat-group__tab { cursor: grabbing; background: color-mix(in srgb, var(--instrument) 18%, transparent); }
+.react-flow__node-catGroup.dragging .cat-group { border-color: color-mix(in srgb, var(--instrument) 60%, transparent); }
+
+/* the links between Notes, in play order; dashes flow from one Notes to the next */
+.cat-group__links {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+.cat-group__links line {
+  stroke: var(--notes);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-dasharray: 3 6;
+  animation: cat-flow 0.9s linear infinite;
+}
+@keyframes cat-flow {
+  to { stroke-dashoffset: -9; } /* one dash + gap, so the loop is seamless */
+}
+
+/* small arrow chip in the middle of each link */
+.cat-group__then {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: var(--tile);
+  border: 1px solid var(--notes-chip-border);
+  color: var(--notes);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cat-group__links line { animation: none; }
+}
