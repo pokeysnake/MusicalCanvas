@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { compile } from "./compile";
 import { emptyDoc, OUTPUT_ID } from "./doc";
 import { edgeId } from "./types";
-import type { Doc, GraphNode, InstrumentData } from "./types";
+import type { Doc, FxEffect, GraphNode, InstrumentData } from "./types";
 import type { FilterKind } from "./filters";
 
 /** Builders: one line per node */
@@ -163,5 +163,65 @@ describe("compile", () => {
       [["n1", "i1"], ["i1", OUT], ["n2", "i2"], ["i2", OUT]],
     );
     expect(compile(doc).code).toBe(code('note("c4").s("sawtooth")'));
+  });
+});
+/* ---------- FX rack ---------- */
+const fxRack = (id: string, effects: FxEffect[]): GraphNode =>
+  ({ id, type: "fx", position: at(0), data: { effects } });
+const row = (id: string, kind: FilterKind, value: number, on = true, q?: number): FxEffect =>
+  ({ id, kind, value, on, ...(q !== undefined ? { q } : {}) });
+
+describe("compile: fx rack", () => {
+  it("chains every effect that's on, top row first (filters get their Q)", () => {
+    const doc = docOf(
+      [notes("n", "c4"), inst("i", "saw"), fxRack("x", [
+        row("e1", "lpf", 1200, true, 2), row("e2", "gain", 0.8), row("e3", "room", 0.4),
+      ])],
+      [["n", "i"], ["i", "x"], ["x", OUT]],
+    );
+    expect(compile(doc).code).toBe(code('note("c4").s("sawtooth").lpf(1200).lpq(2).gain(0.8).room(0.4)'));
+  });
+
+  it("skips bypassed rows, and a filter row without q uses 0.7", () => {
+    const doc = docOf(
+      [notes("n", "c4"), inst("i", "saw"), fxRack("x", [row("e1", "delay", 0.25, false), row("e2", "hpf", 300)])],
+      [["n", "i"], ["i", "x"], ["x", OUT]],
+    );
+    expect(compile(doc).code).toBe(code('note("c4").s("sawtooth").hpf(300).hpq(0.7)'));
+  });
+
+  it("an empty or fully bypassed rack passes its input through", () => {
+    const doc = docOf(
+      [notes("n", "c4"), inst("i", "saw"), fxRack("x", [row("e1", "gain", 2, false)])],
+      [["n", "i"], ["i", "x"], ["x", OUT]],
+    );
+    expect(compile(doc).code).toBe(code('note("c4").s("sawtooth")'));
+  });
+
+  it("stacks several inputs before the effects", () => {
+    const doc = docOf(
+      [notes("n1", "c4"), inst("i1", "saw"), notes("n2", "e4"), inst("i2", "square"), fxRack("x", [row("e1", "room", 0.5)])],
+      [["n1", "i1"], ["n2", "i2"], ["i1", "x"], ["i2", "x"], ["x", OUT]],
+    );
+    expect(compile(doc).code).toBe(code('stack(note("c4").s("sawtooth"), note("e4").s("square")).room(0.5)'));
+  });
+
+  it("works next to a Filter node (instrument -> filter -> fx -> output)", () => {
+    const doc = docOf(
+      [notes("n", "c4"), inst("i", "saw"), filter("f", "lpf", 800), fxRack("x", [row("e1", "delay", 0.25)])],
+      [["n", "i"], ["i", "f"], ["f", "x"], ["x", OUT]],
+    );
+    expect(compile(doc).code).toBe(code('note("c4").s("sawtooth").lpf(800).lpq(0.7).delay(0.25)'));
+  });
+
+  it("reports an unknown effect and still plays the rest", () => {
+    const doc = docOf(
+      [notes("n", "c4"), inst("i", "saw"),
+        fxRack("x", [row("e1", "chorus" as FilterKind, 1), row("e2", "gain", 0.5)])],
+      [["n", "i"], ["i", "x"], ["x", OUT]],
+    );
+    const r = compile(doc);
+    expect(r.code).toBe(code('note("c4").s("sawtooth").gain(0.5)'));
+    expect(r.issues).toEqual([{ nodeId: "x", message: "unknown effect: chorus" }]);
   });
 });

@@ -11,6 +11,10 @@ export type CompileResult = { code: string; issues: CompileIssue[] };
 
 type InstrumentNode = Extract<GraphNode, {type:"instrument"}>;
 type FilterNode = Extract<GraphNode, { type: "filter" }>
+type FxNode = Extract<GraphNode, { type: "fx" }>;
+
+// Q for an FX row that doesn't carry one (same default the Filter node starts with)
+const DEFAULT_Q = 0.7;
 
 //top to bottom by canvas y; ties broken id so the output never depends on insertion order
 export function byPosition(a:GraphNode, b:GraphNode): number {
@@ -104,11 +108,34 @@ export function compile(doc:Doc): CompileResult {
         return `${stackOf(parts)}.${kind}(${value})` + (qParam ? `.${qParam}(${q})` : "");
     }
 
+    /**
+     * FX rack: its inputs (stacked) with every effect that's on chained after, top row first, e.g.
+     *   stack(a, b).lpf(1200).lpq(0.7).gain(0.8).room(0.4)
+     * bypassed rows are skipped; with nothing on, the rack just passes its inputs through.
+     * An unknown kind (from a newer client, say) is reported and that row skipped, the rest still plays.
+     */
+    function fxExpr(node: FxNode): string | null {
+        const parts = inputExprs(node.id);
+        if (parts.length === 0) return null;
+        let expr = stackOf(parts);
+        for (const e of node.data.effects) {
+            if (!e.on) continue;
+            if (!Object.hasOwn(FILTERS, e.kind)) {
+                issues.set(node.id, `unknown effect: ${e.kind}`);
+                continue;
+            }
+            const qParam = Q_PARAM[e.kind];
+            expr += `.${e.kind}(${e.value})` + (qParam ? `.${qParam}(${e.q ?? DEFAULT_Q})` : "");
+        }
+        return expr;
+    }
+
     // build a node's code from scratch (null = nothing to play); Notes are read by their instrument
     function buildExpr(node: GraphNode): string | null {
         switch (node.type) {
             case "instrument": return instrumentExpr(node);
             case "filter":     return filterExpr(node);
+            case "fx":         return fxExpr(node);
             default:           return null;
         }
     }

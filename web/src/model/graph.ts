@@ -7,8 +7,9 @@ export type EdgeLike = { source: string; target: string };
 /** which node types may connect to which */
 const VALID_TARGETS: Record<NodeType, NodeType[]> = {
   notes:      ["instrument"],
-  instrument: ["filter", "output"],
-  filter:     ["filter", "output"],
+  instrument: ["filter", "fx", "output"],
+  filter:     ["filter", "fx", "output"],
+  fx:         ["filter", "fx", "output"], // an FX rack can sit anywhere a Filter can
   output:     [],
 };
 

@@ -2,6 +2,7 @@ import type { ApplyResult, Doc, GraphEdge, NodeType, Op, Position } from "./type
 import { edgeId } from "./types";
 import { isValidPair, wouldCreateCycle } from "./graph";
 import { isSoundId } from "./sounds";
+import { FILTERS } from "./filters";
 
 // small helpers so every case reads cleanly
 const ok = (doc: Doc): ApplyResult => ({ ok: true, doc });
@@ -23,8 +24,31 @@ const EDITABLE_FIELDS: Record<NodeType, string[]> = {
   notes: ["name", "text"],
   instrument: ["sound", "muted", "solo"],
   filter: ["kind", "value", "q"],
+  fx: ["effects"],
   output: [],
 };
+
+/**
+ * An FX rack's `effects` list arrives as JSON, so check every row's shape (null = fine, else why not).
+ * Each row: a non-empty string id (unique in the rack), a known effect kind, a finite value,
+ * an optional finite q, and on = true/false. Values aren't range-checked here, same as Filter nodes.
+ */
+export function badEffects(effects: unknown): string | null {
+  if (!Array.isArray(effects)) return "effects must be a list";
+  const ids = new Set<string>();
+  for (const e of effects) {
+    if (typeof e !== "object" || e === null) return "each effect must be an object";
+    const { id, kind, value, q, on } = e as Record<string, unknown>;
+    if (typeof id !== "string" || id === "") return "each effect needs an id";
+    if (ids.has(id)) return `duplicate effect id: ${id}`;
+    ids.add(id);
+    if (typeof kind !== "string" || !Object.hasOwn(FILTERS, kind)) return `unknown effect: ${String(kind)}`;
+    if (!isNum(value)) return "effect value must be a finite number";
+    if (q !== undefined && !isNum(q)) return "effect q must be a finite number";
+    if (typeof on !== "boolean") return "effect on must be true or false";
+  }
+  return null;
+}
 
 export function applyOp(doc: Doc, op: Op): ApplyResult {
   switch (op.type) {
@@ -59,6 +83,10 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       if (op.node.type === "instrument" && !isSoundId(op.node.data.sound))
         return reject(`unknown sound: ${op.node.data.sound}`);
       if (badPosition(op.node.position)) return reject("position must be finite numbers");
+      if (op.node.type === "fx") {
+        const why = badEffects(op.node.data.effects);
+        if (why) return reject(why);
+      }
       const badField = badNumberField(op.node.data);
       if (badField) return reject(`${badField} must be a finite number`);
       return ok({ ...doc, nodes: { ...doc.nodes, [op.node.id]: op.node } });
@@ -129,6 +157,10 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
         return reject(`${node.type} has no field(s): ${bad.join(", ")}`);
       if (op.patch.sound !== undefined && !isSoundId(op.patch.sound))
         return reject(`unknown sound: ${op.patch.sound}`);
+      if (op.patch.effects !== undefined) {
+        const why = badEffects(op.patch.effects);
+        if (why) return reject(why);
+      }
       const badField = badNumberField(op.patch);
       if (badField) return reject(`${badField} must be a finite number`);
 

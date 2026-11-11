@@ -324,3 +324,85 @@ describe("applyOp: sequences", () => {
     expect(end.edges).toEqual(start.edges);
   });
 });
+/* =====================================================================
+   FX rack (one node holding several effects; mirrored in server/tests/test_apply_op.py)
+   ===================================================================== */
+const fx = (id: string, effects: unknown[] = [{ id: "e1", kind: "lpf", value: 800, q: 0.7, on: true }]): GraphNode =>
+  ({ id, type: "fx", position: { x: 0, y: 0 }, data: { effects } } as GraphNode);
+const setEffects = (id: string, effects: unknown): Op =>
+  ({ type: "updateNodeData", opId: opId(), id, patch: { effects } } as Op);
+
+describe("applyOp: fx rack", () => {
+  it("adds an fx rack and wires instrument -> fx -> output", () => {
+    const doc = applyAll(emptyDoc(), [
+      add(notes("n")), add(instrument("i")), add(fx("x")),
+      connect("n", "i"), connect("i", "x"), connect("x", OUTPUT_ID),
+    ]);
+    expect(doc.nodes.x.type).toBe("fx");
+    expect(Object.keys(doc.edges).sort()).toEqual(["i->x", "n->i", `x->${OUTPUT_ID}`].sort());
+  });
+
+  it("an empty rack is allowed", () => {
+    expect(mustApply(emptyDoc(), add(fx("x", []))).nodes.x).toBeDefined();
+  });
+
+  it("can sit next to filters: filter -> fx -> fx -> filter", () => {
+    const doc = applyAll(emptyDoc(), [
+      add(filter("f1")), add(fx("x1")), add(fx("x2")), add(filter("f2")),
+      connect("f1", "x1"), connect("x1", "x2"), connect("x2", "f2"),
+    ]);
+    expect(Object.keys(doc.edges)).toHaveLength(3);
+  });
+
+  it("notes cannot plug straight into an fx rack", () => {
+    const doc = applyAll(emptyDoc(), [add(notes("n")), add(fx("x"))]);
+    expect(mustReject(doc, connect("n", "x"))).toBe("notes cannot connect to fx");
+  });
+
+  it("rejects a loop through fx racks", () => {
+    const doc = applyAll(emptyDoc(), [add(fx("a")), add(fx("b")), connect("a", "b")]);
+    expect(mustReject(doc, connect("b", "a"))).toBe("would create a cycle");
+  });
+
+  it("updateNodeData replaces the whole effects list", () => {
+    const doc = mustApply(emptyDoc(), add(fx("x")));
+    const effects = [
+      { id: "e1", kind: "lpf", value: 1200, q: 0.7, on: false },
+      { id: "e2", kind: "room", value: 0.4, on: true },
+    ];
+    const next = mustApply(doc, setEffects("x", effects));
+    expect(next.nodes.x.data).toEqual({ effects });
+  });
+
+  it("rejects bad effects lists (addNode and updateNodeData)", () => {
+    const doc = mustApply(emptyDoc(), add(fx("x")));
+    const row = { id: "e1", kind: "lpf", value: 800, on: true };
+    const cases: [unknown, string][] = [
+      ["lpf", "effects must be a list"],
+      [[null], "each effect must be an object"],
+      [[{ ...row, id: "" }], "each effect needs an id"],
+      [[row, { ...row }], "duplicate effect id: e1"],
+      [[{ ...row, kind: "chorus" }], "unknown effect: chorus"],
+      [[{ ...row, value: Number.NaN }], "effect value must be a finite number"],
+      [[{ ...row, value: "800" }], "effect value must be a finite number"],
+      [[{ ...row, q: Infinity }], "effect q must be a finite number"],
+      [[{ ...row, on: 1 }], "effect on must be true or false"],
+    ];
+    for (const [effects, reason] of cases) {
+      expect(mustReject(doc, setEffects("x", effects))).toBe(reason);
+      expect(mustReject(emptyDoc(), add(fx("y", effects as unknown[])))).toBe(reason);
+    }
+  });
+
+  it("an fx rack only takes `effects`, and other nodes don't take it", () => {
+    const doc = applyAll(emptyDoc(), [add(fx("x")), add(filter("f"))]);
+    expect(mustReject(doc, { type: "updateNodeData", opId: opId(), id: "x", patch: { value: 5 } }))
+      .toBe("fx has no field(s): value");
+    expect(mustReject(doc, setEffects("f", []))).toBe("filter has no field(s): effects");
+  });
+
+  it("never modifies the input doc", () => {
+    const doc = deepFreeze(mustApply(emptyDoc(), add(fx("x"))));
+    expect(() => applyOp(doc, setEffects("x", []))).not.toThrow();
+  });
+});

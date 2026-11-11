@@ -1,11 +1,21 @@
 // type-only import
 import type { FilterKind } from "@/model/filters";
 
-// these match exactly what the four node components alread read
+// these match exactly what the node components read
 export type NotesData = { name: string; text: string };
 export type InstrumentData = { sound: string; muted: boolean; solo: boolean };
 export type FilterData = { kind: FilterKind; value: number; q: number };
 export type OutputData = Record<string, never>; //an object with no fields
+
+/**
+ * FX rack: several effects in ONE node instead of a chain of Filter nodes.
+ * - each row is one effect; `on: false` = bypassed (kept, but not compiled)
+ * - row ids are random (crypto.randomUUID) so a row can be told apart even if two have the same kind
+ * - edits replace the whole `effects` list in one updateNodeData op (if two users edit different rows of the same
+ *   rack at the same moment, the later op wins; per-row ops are a Stage 6 conflict-rules decision)
+ */
+export type FxEffect = { id: string; kind: FilterKind; value: number; q?: number; on: boolean };
+export type FxData = { effects: FxEffect[] };
 
 // Node itself as a discriminated union
 export type Position = { x: number; y: number };
@@ -16,6 +26,7 @@ export type GraphNode =
   | (NodeBase & { type: "notes"; data: NotesData })
   | (NodeBase & { type: "instrument"; data: InstrumentData })
   | (NodeBase & { type: "filter"; data: FilterData })
+  | (NodeBase & { type: "fx"; data: FxData })
   | (NodeBase & { type: "output"; data: OutputData });
 
 export type NodeType = GraphNode["type"]; // "notes" | "instrument" | "filter" | "output"
@@ -55,7 +66,7 @@ export type Doc = {
 // Ops --> complete list of ways the song can change
 type OpBase = { opId: string }; //unique per op; used for de-duping later
 
-export type NodePatch = Partial<NotesData & InstrumentData & FilterData>;
+export type NodePatch = Partial<NotesData & InstrumentData & FilterData & FxData>;
 
 export type Op =
   | (OpBase & { type: "addNode"; node: GraphNode })
