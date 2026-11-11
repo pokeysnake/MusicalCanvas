@@ -17,13 +17,25 @@ html .fx-rack { --nc: var(--filter); } /* a box of filters */
 
 /* ---------- Faceplate: coloured strip along the top, tinted border, a little depth ---------- */
 html :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
+  position: relative; /* anchors the strip below */
   background-color: var(--tile);
   border-color: color-mix(in srgb, var(--nc) 38%, var(--tile-border));
-  box-shadow: inset 0 3px 0 var(--nc), 0 10px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+}
+/* The strip is an overlay that sits ON the card's border (inset -1px) instead of an inset shadow inside it:
+   an inset shadow leaves a hairline seam against the border at some zoom levels. A 4px top border on a
+   rounded box tapers into the corners on its own. */
+html :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack)::before {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-top: 4px solid var(--nc);
+  border-radius: 15px; /* card radius 14 + the 1px it sticks out */
+  pointer-events: none;
 }
 html .react-flow__node.selected :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
   border-color: var(--nc);
-  box-shadow: inset 0 3px 0 var(--nc), 0 0 0 3px color-mix(in srgb, var(--nc) 30%, transparent), 0 10px 28px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc) 30%, transparent), 0 10px 28px rgba(0, 0, 0, 0.35);
 }
 /* eyebrow labels ("NOTES", "FILTER", ...) in the node's colour */
 html :is(.notes-node__eyebrow, .instrument-node__eyebrow, .filter-node__eyebrow, .output-node__eyebrow) {
@@ -70,8 +82,11 @@ html .cable.is-selected .cable__core { stroke-width: 7; }
 /* felt / paper grain on every node (SVG noise, no image file) */
 html[data-theme="analog"] :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
   background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.85  0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.85  0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
     linear-gradient(180deg, rgba(255, 240, 220, 0.04), transparent 50%);
+  /* one stretched tile, not a repeating 140px one: repeated SVG tiles show seams at some zoom levels */
+  background-size: cover, auto;
+  background-repeat: no-repeat;
 }
 
 /* braided cloth cables (tight dash pattern), only a faint sheen */
