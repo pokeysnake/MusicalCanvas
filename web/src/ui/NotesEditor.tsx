@@ -10,9 +10,13 @@ export type Rect = { top: number; left: number; width: number; height: number };
 
 const MORPH = { duration: 0.3, ease: [0.2, 0.8, 0.2, 1] as const };
 
+/** longest name a Notes node can have (fits the node's title line) */
+export const NAME_MAX = 32;
+
 /**
- * Popup for editing a Notes node's text.
- * The draft lives only here (UI state, never in the Doc); Save sends one updateNodeData op.
+ * Popup for editing a Notes node's name ("Verse", "Chorus") and text.
+ * The drafts live only here (UI state, never in the Doc); Save sends one updateNodeData op with just the fields
+ * that changed. A blank name keeps the old one.
  * Render it with key={nodeId} so opening another node starts a fresh draft.
  *
  * Expand animation (Aceternity "expandable card" style): a blank "ghost" card is drawn exactly over the node,
@@ -27,6 +31,8 @@ export default function NotesEditor({ nodeId, name, text, from, onClose }: {
   onClose: () => void;
 }) {
   const [draft, setDraft] = useState(text);
+  const [nameDraft, setNameDraft] = useState(name);
+  const textRef = useRef<HTMLTextAreaElement>(null);
   const update = useUpdateNodeData(nodeId);
   const parsed = parseNotes(draft);
 
@@ -50,7 +56,12 @@ export default function NotesEditor({ nodeId, name, text, from, onClose }: {
 
   const save = () => {
     if (!parsed.ok) return;
-    if (draft !== text) update({ text: draft }); // no op when nothing changed
+    const newName = nameDraft.trim() || name; // blank = keep the old name
+    const patch = {
+      ...(newName !== name ? { name: newName } : {}),
+      ...(draft !== text ? { text: draft } : {}),
+    };
+    if (Object.keys(patch).length > 0) update(patch); // no op when nothing changed
     close();
   };
 
@@ -71,9 +82,14 @@ export default function NotesEditor({ nodeId, name, text, from, onClose }: {
             {/* content fades in after the card has mostly grown, so it isn't seen stretched */}
             <motion.div className="notes-editor__content"
               initial={from ? { opacity: 0 } : false} animate={{ opacity: 1 }} transition={{ delay: 0.15, duration: 0.15 }}>
-              <div className="notes-editor__title">{name}</div>
+              {/* the name: looks like a title, edits like a field. Enter jumps down to the notes */}
+              <input className="notes-editor__name" value={nameDraft} maxLength={NAME_MAX} spellCheck={false}
+                aria-label="Name" placeholder={name} onChange={(e) => setNameDraft(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.ctrlKey && !e.metaKey) { e.preventDefault(); textRef.current?.focus(); }
+                }} />
 
-              <textarea className="notes-editor__input" value={draft} autoFocus spellCheck={false}
+              <textarea ref={textRef} className="notes-editor__input" value={draft} autoFocus spellCheck={false}
                 aria-invalid={!parsed.ok} onChange={(e) => setDraft(e.target.value)} />
 
               {parsed.ok ? (

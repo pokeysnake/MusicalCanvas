@@ -48,7 +48,25 @@
   border-color: var(--tile-border);
 }
 
-.notes-editor__title { font-weight: 600; color: var(--notes); }
+/* name field: reads as the popup's title until you hover or focus it, then shows it's editable */
+.notes-editor__name {
+  width: calc(100% + 12px); /* the padding pokes out past the text column, so the text lines up with it */
+  margin: -4px -6px 0;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--notes);
+  font: 600 16px var(--font-sans);
+  outline: none;
+  transition: border-color 0.15s, background 0.15s;
+}
+.notes-editor__name:hover { border-color: var(--tile-border); }
+.notes-editor__name:focus {
+  border-color: var(--notes);
+  background: var(--tile-raised);
+}
+.notes-editor__name::placeholder { color: var(--muted); }
 
 .notes-editor__input {
   min-height: 80px;
