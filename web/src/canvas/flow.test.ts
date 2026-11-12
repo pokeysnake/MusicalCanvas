@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { emptyDoc, OUTPUT_ID } from "@/model/doc";
 import { nodesReachingOutput } from "@/model/graph";
 import { initialSync as initialState, syncReducer, type SyncState as State } from "@/sync/optimistic";
+import type { Doc, GraphNode, Op } from "@/model/types";
+import { emptyUi, toFlowEdges, toFlowNodes } from "./flow";
 
 // the editor's reducer in solo mode: every op applies straight to the doc
 const reducer = (s: State, op: Op) => syncReducer(s, { type: "local", op, seq: null });
-import type { Doc, GraphNode, Op } from "@/model/types";
-import { emptyUi, toFlowEdges, toFlowNodes } from "./flow";
 
 describe("toFlowNodes", () => {
   it("uses the drag overlay position over the Doc position", () => {

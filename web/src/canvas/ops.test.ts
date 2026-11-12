@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { emptyDoc, OUTPUT_ID } from "@/model/doc";
 import { initialSync as initialState, syncReducer, type SyncState } from "@/sync/optimistic";
+import type { Doc, GraphNode, Op } from "@/model/types";
+import { bpmOp, deleteOp, moveOp } from "./ops";
 
 // the editor's reducer in solo mode: every op applies straight to the doc
 const reducer = (s: SyncState, op: Op) => syncReducer(s, { type: "local", op, seq: null });
-import type { Doc, GraphNode, Op } from "@/model/types";
-import { bpmOp, deleteOp, moveOp } from "./ops";
 
 /* the gate: one user action = one op. These are the exact builders the drag-stop and delete handlers call. */
 
