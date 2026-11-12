@@ -12,4 +12,4 @@ pytest   # inside server/
 ```
 
 ## License note
-Strudel is AGPL-3.0: keep this repo public under AGPL, credit Strudel, link source from the app.
+Licensed under AGPL-3.0-or-later (see [LICENSE](LICENSE)), the same license as [Strudel](https://strudel.cc), which this app builds on. The app's footer credits Strudel and links to this repo, so users of the hosted version can always find the source.

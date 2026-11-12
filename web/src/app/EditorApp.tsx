@@ -426,9 +426,10 @@ function Editor({ roomId }: { roomId: string | null }) {
                     ))}
                 </aside>
 
-                <footer className="eq">
-                    <span>EQ</span><span>L</span><span>M</span><span>H</span>
-                    <span>(dials arrive in Stage 9)</span>
+                {/* AGPL-3.0 (sections 6d and 13): users of the hosted app get clear directions to its source */}
+                <footer className="credits">
+                    <span>made with <a href="https://strudel.cc" target="_blank" rel="noreferrer">strudel</a> (AGPL-3.0)</span>
+                    <span>this app is AGPL-3.0 too · <a href="https://github.com/pokeysnake/MusicalCanvas" target="_blank" rel="noreferrer">source code</a></span>
                 </footer>
 
                 {/* outside <ReactFlow>, so typing in it never reaches the canvas */}
