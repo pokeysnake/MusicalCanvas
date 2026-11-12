@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Op } from "@/model/types";
 import { starterDoc, starterOps } from "@/model/starter";
 import type { RejectMessage, ServerOpMessage } from "./protocol";
@@ -113,6 +113,18 @@ describe("connectRoom", () => {
       { type: "op", op: bpm(100), clientSeq: 1 },
       { type: "op", op: bpm(110), clientSeq: 2 },
     ]);
+  });
+
+  it("with lag, the seq comes back at once but the op leaves only after the delay", () => {
+    vi.useFakeTimers();
+    const handlers = { onSnapshot() {}, onOp() {}, onReject() {}, onStatus() {} };
+    const room = connectRoom("ws://x/ws/r1", handlers, FakeSocket, 3000);
+    FakeSocket.last.open();
+    expect(room.send(bpm(100))).toBe(1);
+    expect(FakeSocket.last.sent).toEqual([]);
+    vi.advanceTimersByTime(3000);
+    expect(FakeSocket.last.sent).toHaveLength(1);
+    vi.useRealTimers();
   });
 
   it("reports closed when the server drops", () => {

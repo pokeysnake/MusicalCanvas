@@ -28,10 +28,13 @@ export type RoomSocket = { send(op: Op): number | null; close(): void };
 
 const OPEN = 1;
 
+/** lagMs (dev testing only): hold every outgoing op this long before it leaves, so one person can
+ *  create races between two tabs. The op still shows instantly; only the server hears it late. */
 export function connectRoom(
   url: string,
   handlers: Handlers,
   Ctor: SocketCtor = WebSocket as unknown as SocketCtor,
+  lagMs = 0,
 ): RoomSocket {
   const ws = new Ctor(url);
   let seq = 0;
@@ -50,7 +53,9 @@ export function connectRoom(
     send(op) {
       if (ws.readyState !== OPEN) return null;
       const msg: ClientOpMessage = { type: "op", op, clientSeq: ++seq };
-      ws.send(JSON.stringify(msg));
+      const text = JSON.stringify(msg);
+      if (lagMs > 0) setTimeout(() => ws.readyState === OPEN && ws.send(text), lagMs);
+      else ws.send(text);
       return msg.clientSeq;
     },
     close() {
