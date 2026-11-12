@@ -303,6 +303,36 @@ REJECTIONS = [
     ),
     # a null position must reject, not crash on None["x"]
     pytest.param(move({"n": None}), "position", id="moving to a null position"),
+    # raw JSON can put any type in any field; these used to be accepted
+    pytest.param(
+        update("n", {"name": 5}), "name must be a string", id="a non-string Notes name"
+    ),
+    pytest.param(
+        update("n", {"text": None}), "text must be a string", id="a null Notes text"
+    ),
+    pytest.param(
+        update("i", {"muted": "yes"}),
+        "muted must be true or false",
+        id="a non-bool muted",
+    ),
+    # isinstance(1, bool) is False, so the number 1 is not a bool (the reverse of the bool-is-int trap)
+    pytest.param(
+        update("i", {"solo": 1}), "solo must be true or false", id="solo sent as 1"
+    ),
+    pytest.param(
+        update("f", {"kind": "banana"}), "unknown filter", id="an unknown filter kind"
+    ),
+    # a list can't be looked up in a set, so this must reject, not raise TypeError
+    pytest.param(
+        update("f", {"kind": ["lpf"]}),
+        "unknown filter",
+        id="a filter kind that isn't a string",
+    ),
+    pytest.param(
+        add({**notes("n2"), "data": {"name": 5, "text": ""}}),
+        "name must be a string",
+        id="adding Notes with a bad name",
+    ),
 ]
 
 
@@ -377,7 +407,7 @@ PURITY_OPS = [
     pytest.param(connect("f", "i"), id="a rejected connect (would loop i->f->i)"),
     pytest.param(
         move({"n": {"x": 9, "y": 9}, "ghost": {"x": 1, "y": 1}}),
-        id="a move with one missing id moves nothing",
+        id="a move with one missing id",
     ),
     pytest.param(
         delete(["n", OUTPUT_ID]), id="a delete that includes the Output deletes nothing"
@@ -404,6 +434,14 @@ def test_delete_skips_ids_that_are_already_gone():
 def test_delete_with_only_missing_ids_succeeds_and_changes_nothing():
     start = chain_doc()
     assert must_apply(start, delete(["ghost"], ["a->b"])) == start
+
+
+def test_move_skips_ids_that_are_already_gone():
+    doc = must_apply(
+        chain_doc(), move({"n": {"x": 9, "y": 9}, "ghost": {"x": 1, "y": 1}})
+    )
+    assert doc["nodes"]["n"]["position"] == {"x": 9, "y": 9}
+    assert "ghost" not in doc["nodes"]
 
 
 def test_delete_removes_nodes_and_unrelated_edges_in_one_op():

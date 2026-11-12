@@ -148,6 +148,14 @@ describe("applyOp: rejections", () => {
     ["a filter value that is NaN",     { type: "updateNodeData", opId: "x", id: "f", patch: { value: NaN } },     "value"],
     ["a filter q sent as a string",    { type: "updateNodeData", opId: "x", id: "f", patch: { q: "2" as unknown as number } }, "q"],
     ["an eq band that is NaN",         { type: "setSetting", opId: "x", patch: { eq: { low: NaN, mid: 0, high: 0 } } }, "eq"],
+    // raw JSON can put any type in any field (mirrors the Python rows)
+    ["a non-string Notes name",        { type: "updateNodeData", opId: "x", id: "n", patch: { name: 5 as unknown as string } }, "name must be a string"],
+    ["a null Notes text",              { type: "updateNodeData", opId: "x", id: "n", patch: { text: null as unknown as string } }, "text must be a string"],
+    ["a non-bool muted",               { type: "updateNodeData", opId: "x", id: "i", patch: { muted: "yes" as unknown as boolean } }, "muted must be true or false"],
+    ["solo sent as 1",                 { type: "updateNodeData", opId: "x", id: "i", patch: { solo: 1 as unknown as boolean } }, "solo must be true or false"],
+    ["an unknown filter kind",         { type: "updateNodeData", opId: "x", id: "f", patch: { kind: "banana" as "lpf" } }, "unknown filter"],
+    ["a filter kind that isn't a string", { type: "updateNodeData", opId: "x", id: "f", patch: { kind: ["lpf"] as unknown as "lpf" } }, "unknown filter"],
+    ["adding Notes with a bad name",   add({ ...notes("n2"), data: { name: 5 as unknown as string, text: "" } } as GraphNode), "name must be a string"],
   ])("rejects %s", (_desc, op, reason) => {
     const why = mustReject(chainDoc(), op);
     expect(why).toContain(reason);
@@ -216,10 +224,10 @@ describe("applyOp: purity", () => {
     expect(doc).toEqual(before);
   });
 
-  it("a moveNodes with one missing id moves nothing", () => {
+  it("a moveNodes with one missing id leaves the input doc alone", () => {
     const doc = chainDoc();
     const before = structuredClone(doc);
-    mustReject(doc, { type: "moveNodes", opId: "x", positions: { n: { x: 9, y: 9 }, ghost: { x: 1, y: 1 } } });
+    mustApply(doc, { type: "moveNodes", opId: "x", positions: { n: { x: 9, y: 9 }, ghost: { x: 1, y: 1 } } });
     expect(doc).toEqual(before);
   });
 
@@ -253,6 +261,14 @@ describe("applyOp: side effects", () => {
     const start = chainDoc();
     const doc = mustApply(start, del(["ghost"], ["a->b"]));
     expect(doc).toEqual(start);
+  });
+
+  it("moveNodes skips ids that are already gone (someone deleted one mid-drag)", () => {
+    const doc = mustApply(chainDoc(), {
+      type: "moveNodes", opId: "x", positions: { n: { x: 9, y: 9 }, ghost: { x: 1, y: 1 } },
+    });
+    expect(doc.nodes.n.position).toEqual({ x: 9, y: 9 });
+    expect(doc.nodes.ghost).toBeUndefined();
   });
 
   it("deleteElements removes nodes and unrelated edges in one op", () => {

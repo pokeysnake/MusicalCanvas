@@ -41,6 +41,25 @@ def bad_number_field(data: dict) -> str | None:
     return next((k for k in NUMBER_FIELDS if k in data and not is_num(data[k])), None)
 
 
+# node data fields that must be strings / booleans
+STRING_FIELDS = ("name", "text")
+BOOL_FIELDS = ("muted", "solo")
+
+
+def bad_field_type(data: dict) -> str | None:
+    """the first wrong typed field, ex -> name: 5 or muted: yes, else None"""
+    for k in STRING_FIELDS:
+        if k in data and not isinstance(data[k], str):
+            return f"{k} must be a string"
+    for k in BOOL_FIELDS:
+        if k in data and not isinstance(data[k], bool):
+            return f"{k} must be true or false"
+    kind = data.get("kind")
+    if "kind" in data and not (isinstance(kind, str) and kind in FILTER_KINDS):
+        return f"unknown filter: {kind}"
+    return None
+
+
 # which data fields each node type may change; also the list of node types that exist
 EDITABLE_FIELDS: dict[str, set[str]] = {
     "notes": {"name", "text"},
@@ -94,17 +113,19 @@ def _apply(doc: dict, op: dict) -> ApplyResult:
     edges = doc["edges"]
 
     match op["type"]:
-        # all-or-nothing: one missing id rejects the whole drag (a multi-node drag is one action)
+        # missing ids are SKIPPED, like deleteElements: if someone deleted one node
+        # mid-drag, the rest of the drag still lands. Rejected only if NONE still exist.
         case "moveNodes":
             positions = op["positions"]
             if not positions:
                 return Rejected("no nodes to move")
-            if any(nid not in nodes for nid in positions):
-                return Rejected("node does not exist")
             if any(bad_position(p) for p in positions.values()):
                 return Rejected("position must be finite numbers")
+            live = {nid: p for nid, p in positions.items() if nid in nodes}
+            if not live:
+                return Rejected("node does not exist")
             new_nodes = dict(nodes)
-            for nid, p in positions.items():
+            for nid, p in live.items():
                 new_nodes[nid] = {**nodes[nid], "position": {"x": p["x"], "y": p["y"]}}
             return Ok({**doc, "nodes": new_nodes})
 
@@ -128,6 +149,8 @@ def _apply(doc: dict, op: dict) -> ApplyResult:
                 return Rejected(why)
             if bad := bad_number_field(node["data"]):
                 return Rejected(f"{bad} must be a finite number")
+            if why := bad_field_type(node["data"]):
+                return Rejected(why)
             return Ok({**doc, "nodes": {**nodes, node["id"]: node}})
 
         # cheap one-lookup checks first, the full graph search last
@@ -189,6 +212,8 @@ def _apply(doc: dict, op: dict) -> ApplyResult:
                 return Rejected(why)
             if bad_field := bad_number_field(patch):
                 return Rejected(f"{bad_field} must be a finite number")
+            if why := bad_field_type(patch):
+                return Rejected(why)
             updated = {**node, "data": {**node["data"], **patch}}
             return Ok({**doc, "nodes": {**nodes, op["id"]: updated}})
 

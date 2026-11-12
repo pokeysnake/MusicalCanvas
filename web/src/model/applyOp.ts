@@ -19,6 +19,18 @@ const NUMBER_FIELDS = ["value", "q"];
 const badNumberField = (data: object) =>
   NUMBER_FIELDS.find((k) => k in data && !isNum((data as Record<string, unknown>)[k]));
 
+/** node data fields that must be strings / booleans (mirrors bad_field_type in apply_op.py) */
+const STRING_FIELDS = ["name", "text"];
+const BOOL_FIELDS = ["muted", "solo"];
+function badFieldType(data: object): string | null {
+  const d = data as Record<string, unknown>;
+  for (const k of STRING_FIELDS) if (k in d && typeof d[k] !== "string") return `${k} must be a string`;
+  for (const k of BOOL_FIELDS) if (k in d && typeof d[k] !== "boolean") return `${k} must be true or false`;
+  if ("kind" in d && !(typeof d.kind === "string" && Object.hasOwn(FILTERS, d.kind)))
+    return `unknown filter: ${String(d.kind)}`;
+  return null;
+}
+
 /** which data fields each node type is allowed to change */
 const EDITABLE_FIELDS: Record<NodeType, string[]> = {
   notes: ["name", "text"],
@@ -56,17 +68,17 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
     /**
      *  { ...doc} copies the doc --> ...doc.nodes copes the node map, ...is what copies
      *  only the parts that change get copied, everything else is shared with the old doc --> we never modify the input
-     *  all-or-nothing: if any id is missing, nothing moves (a multi-node drag is one action)
-     *  STAGE 6 CONFLICT LIST: if one dragged node is deleted remotely mid-drag, this throws away the whole move.
-     *  Probably should skip missing ids like deleteElements does, decide when the server mirrors this.
+     *  missing ids are SKIPPED, like deleteElements: if someone deleted one node mid-drag,
+     *  the rest of the drag still lands. Rejected only if NONE of the ids still exist.
      */
     case "moveNodes": {
       const ids = Object.keys(op.positions);
       if (ids.length === 0) return reject("no nodes to move");
-      if (ids.some((id) => !doc.nodes[id])) return reject("node does not exist");
       if (ids.some((id) => badPosition(op.positions[id]))) return reject("position must be finite numbers");
+      const live = ids.filter((id) => doc.nodes[id]);
+      if (live.length === 0) return reject("node does not exist");
       const nodes = { ...doc.nodes };
-      for (const id of ids) nodes[id] = { ...nodes[id], position: op.positions[id] };
+      for (const id of live) nodes[id] = { ...nodes[id], position: op.positions[id] };
       return ok({ ...doc, nodes });
     }
 
@@ -89,6 +101,8 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       }
       const badField = badNumberField(op.node.data);
       if (badField) return reject(`${badField} must be a finite number`);
+      const badType = badFieldType(op.node.data);
+      if (badType) return reject(badType);
       return ok({ ...doc, nodes: { ...doc.nodes, [op.node.id]: op.node } });
     }
 
@@ -163,6 +177,8 @@ export function applyOp(doc: Doc, op: Op): ApplyResult {
       }
       const badField = badNumberField(op.patch);
       if (badField) return reject(`${badField} must be a finite number`);
+      const badType = badFieldType(op.patch);
+      if (badType) return reject(badType);
 
       const updated = {
         ...node,
