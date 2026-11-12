@@ -33,6 +33,15 @@ describe("parseServerMessage", () => {
     expect(parseServerMessage(JSON.stringify(op))).toEqual(op);
   });
 
+  it("accepts a reject", () => {
+    const reject = { type: "reject", clientSeq: 2, reason: "duplicate connection" };
+    expect(parseServerMessage(JSON.stringify(reject))).toEqual(reject);
+  });
+
+  it("returns null for a reject without a reason", () => {
+    expect(parseServerMessage(JSON.stringify({ type: "reject", clientSeq: 2 }))).toBeNull();
+  });
+
   it("returns null for text that isn't JSON", () => {
     expect(parseServerMessage("hello")).toBeNull();
   });

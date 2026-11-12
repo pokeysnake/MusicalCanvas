@@ -6,7 +6,8 @@ import type { ServerMessage } from "./protocol";
 export function docFromOps(ops: Op[]): Doc {
   return ops.reduce((doc, op) => {
     const r = applyOp(doc, op);
-    /** a rejected op is skipped the server only checks the envelope right now, every client runs the same applyOp over the same list in the same order so they all skip the same ops and have identical docs */
+    /** the server now rejects bad ops before storing them, so this skip is a safety net (e.g. an op log
+     *  written before Stage 6): every client runs the same applyOp over the same list, so they all skip the same ops */
     return r.ok ? r.doc : doc;
   }, emptyDoc());
 }
@@ -20,6 +21,9 @@ export function parseServerMessage(text: string): ServerMessage | null {
   }
   if (typeof data !== "object" || data === null) return null;
   const m = data as Record<string, unknown>;
+  if (m.type === "reject" && typeof m.clientSeq === "number" && typeof m.reason === "string") {
+    return data as ServerMessage;
+  }
   const hasIds = typeof m.version === "number" && typeof m.clientId === "string";
   if (m.type === "snapshot" && hasIds && Array.isArray(m.ops)) return data as ServerMessage;
   if (m.type === "op" && hasIds && typeof m.clientSeq === "number" && typeof m.op === "object" && m.op !== null) {

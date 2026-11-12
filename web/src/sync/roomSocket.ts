@@ -1,6 +1,6 @@
 import type { Doc, Op } from "@/model/types";
 import { docFromOps, parseServerMessage } from "./messages";
-import type { ClientOpMessage } from "./protocol";
+import type { ClientOpMessage, RejectMessage, ServerOpMessage } from "./protocol";
 
 export type Status = "connecting" | "open" | "closed";
 
@@ -15,12 +15,16 @@ export type SocketLike = {
 export type SocketCtor = new (url: string) => SocketLike;
 
 export type Handlers = {
-  onSnapshot(doc: Doc): void;
-  onOp(op: Op): void;
+  /** the room's doc plus the id the server gave this connection (to spot our own echoes) */
+  onSnapshot(doc: Doc, clientId: string): void;
+  /** the whole message: the optimistic layer needs the sender's clientId and clientSeq */
+  onOp(msg: ServerOpMessage): void;
+  onReject(msg: RejectMessage): void;
   onStatus(status: Status): void;
 };
 
-export type RoomSocket = { send(op: Op): void; close(): void };
+/** send() returns the clientSeq the op went out with, or null if the socket wasn't open (op dropped) */
+export type RoomSocket = { send(op: Op): number | null; close(): void };
 
 const OPEN = 1;
 
@@ -38,14 +42,16 @@ export function connectRoom(
     if (typeof e.data !== "string") return;
     const msg = parseServerMessage(e.data);
     if (!msg) return;
-    if (msg.type === "snapshot") handlers.onSnapshot(docFromOps(msg.ops));
-    else handlers.onOp(msg.op);
+    if (msg.type === "snapshot") handlers.onSnapshot(docFromOps(msg.ops), msg.clientId);
+    else if (msg.type === "reject") handlers.onReject(msg);
+    else handlers.onOp(msg);
   };
   return {
     send(op) {
-      if (ws.readyState !== OPEN) return;
+      if (ws.readyState !== OPEN) return null;
       const msg: ClientOpMessage = { type: "op", op, clientSeq: ++seq };
       ws.send(JSON.stringify(msg));
+      return msg.clientSeq;
     },
     close() {
       ws.onopen = ws.onmessage = ws.onclose = null;

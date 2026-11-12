@@ -9,7 +9,7 @@ import {
 
 import { nodesReachingOutput } from "@/model/graph";
 import { applyOp } from "@/model/applyOp";
-import { initialState, reducer } from "@/model/reducer";
+import { initialSync, syncReducer } from "@/sync/optimistic";
 import { emptyUi, GROUP_PREFIX, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
 import { DispatchProvider } from "@/canvas/dispatch";
 import { bpmOp, deleteOp, moveOp } from "@/canvas/ops";
@@ -72,13 +72,18 @@ const BPM_MAX = 240;
    ===================================================================== */
 function Editor({ roomId }: { roomId: string | null }) {
     /* ---------- State ---------- */
-    const [{ doc, error: opError }, apply] = useReducer(reducer, initialDoc, initialState);
+    const [{ doc, error: opError }, act] = useReducer(syncReducer, initialDoc, initialSync);
 
-    /* In a room (roomId set) nothing applies locally: an op goes to the server and comes back as the
-       broadcast, and only then reaches the reducer (non-optimistic; Stage 6 adds optimism).
-       Solo (roomId null): the op applies straight away. Either way the rest of the app just calls dispatch(op). */
-    const { status, send } = useRoomSocket(roomId, apply);
-    const dispatch = useCallback((op: Op) => (roomId ? send(op) : apply(op)), [roomId, send, apply]);
+    /* Optimistic (Stage 6): every op shows up on screen at once.
+       Room: send it first to learn its clientSeq, then apply it as pending; the echo confirms it,
+       a reject rolls it back (see sync/optimistic.ts). If the socket isn't open the op is dropped.
+       Solo (roomId null): it goes straight into the doc. Either way the rest of the app just calls dispatch(op). */
+    const { status, send } = useRoomSocket(roomId, act);
+    const dispatch = useCallback((op: Op) => {
+        if (!roomId) return act({ type: "local", op, seq: null });
+        const seq = send(op);
+        if (seq !== null) act({ type: "local", op, seq });
+    }, [roomId, send, act]);
     const router = useRouter();
     const [ui, setUi] = useState<UiState>(emptyUi);
 

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Doc, Op } from "@/model/types";
 import { starterDoc, starterOps } from "@/model/starter";
+import type { RejectMessage, ServerOpMessage } from "./protocol";
 import { connectRoom, type SocketLike, type Status } from "./roomSocket";
 
 class FakeSocket implements SocketLike {
@@ -32,14 +33,20 @@ class FakeSocket implements SocketLike {
 const bpm = (n: number): Op => ({ type: "setSetting", opId: `t${n}`, patch: { bpm: n } });
 
 let docs: Doc[];
-let ops: Op[];
+let ops: ServerOpMessage[];
+let rejects: RejectMessage[];
+let ids: string[];
 let statuses: Status[];
 const connect = () =>
   connectRoom(
     "ws://x/ws/r1",
     {
-      onSnapshot: (d) => docs.push(d),
-      onOp: (o) => ops.push(o),
+      onSnapshot: (d, id) => {
+        docs.push(d);
+        ids.push(id);
+      },
+      onOp: (m) => ops.push(m),
+      onReject: (m) => rejects.push(m),
       onStatus: (s) => statuses.push(s),
     },
     FakeSocket,
@@ -48,6 +55,8 @@ const connect = () =>
 beforeEach(() => {
   docs = [];
   ops = [];
+  rejects = [];
+  ids = [];
   statuses = [];
 });
 
@@ -63,12 +72,22 @@ describe("connectRoom", () => {
     connect();
     FakeSocket.last.receive({ type: "snapshot", version: starterOps.length, clientId: "c1", ops: starterOps });
     expect(docs).toEqual([starterDoc()]);
+    expect(ids).toEqual(["c1"]);
   });
 
-  it("passes a broadcast op to onOp", () => {
+  it("passes a broadcast op to onOp, with the sender's clientId and clientSeq", () => {
     connect();
-    FakeSocket.last.receive({ type: "op", op: bpm(100), version: 1, clientId: "c2", clientSeq: 1 });
-    expect(ops).toEqual([bpm(100)]);
+    const msg = { type: "op", op: bpm(100), version: 1, clientId: "c2", clientSeq: 1 };
+    FakeSocket.last.receive(msg);
+    expect(ops).toEqual([msg]);
+  });
+
+  it("passes a reject to onReject", () => {
+    connect();
+    const msg = { type: "reject", clientSeq: 3, reason: "bpm must be 40-240" };
+    FakeSocket.last.receive(msg);
+    expect(rejects).toEqual([msg]);
+    expect(ops).toEqual([]);
   });
 
   it("ignores garbage", () => {
@@ -81,15 +100,15 @@ describe("connectRoom", () => {
 
   it("drops a send while the socket isn't open", () => {
     const room = connect();
-    room.send(bpm(100));
+    expect(room.send(bpm(100))).toBeNull();
     expect(FakeSocket.last.sent).toEqual([]);
   });
 
   it("sends {type, op, clientSeq} counting up from 1", () => {
     const room = connect();
     FakeSocket.last.open();
-    room.send(bpm(100));
-    room.send(bpm(110));
+    expect(room.send(bpm(100))).toBe(1);
+    expect(room.send(bpm(110))).toBe(2);
     expect(FakeSocket.last.sent.map((s) => JSON.parse(s))).toEqual([
       { type: "op", op: bpm(100), clientSeq: 1 },
       { type: "op", op: bpm(110), clientSeq: 2 },
