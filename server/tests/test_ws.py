@@ -3,12 +3,14 @@
 # runs as soon as pytest imports the file, so only setup lives up here
 
 import json
+from contextlib import contextmanager
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.rooms import replay
 
 client = TestClient(app)
 
@@ -37,6 +39,61 @@ def op_msg(bpm: int, seq: int) -> dict:
 def raw_msg(op: dict, seq: int) -> dict:
     # wraps any op valid or not in a client -> server envelope
     return {"type": "op", "op": op, "clientSeq": seq}
+
+
+def send(ws, op: dict, seq: int) -> dict:
+    # sends one op and returns the server answer to the sender: its echo or a reject
+    ws.send_json(raw_msg(op, seq))
+    return ws.receive_json()
+
+
+def room_doc(room: str) -> dict:
+    # the doc a client joining right now would build --> snapshots ops replayed
+    with client.websocket_connect(f"/ws/{room}") as ws:
+        return replay(ws.receive_json()["ops"])
+
+
+@contextmanager
+def two_clients():
+    # a and b in a fresh room, snapshots already read --> yields (room, a, b)
+    room = new_room()
+    with (
+        client.websocket_connect(f"/ws/{room}") as a,
+        client.websocket_connect(f"/ws/{room}") as b,
+    ):
+        a.receive_json()
+        b.receive_json()
+        yield room, a, b
+
+
+# short op builders; opId isn't checked by apply_op, so x is okay to use
+def connect(source: str, target: str) -> dict:
+    return {"type": "connect", "opId": "x", "source": source, "target": target}
+
+
+def delete(node_ids: list[str]) -> dict:
+    return {"type": "deleteElements", "opId": "x", "nodeIds": node_ids, "edgeIds": []}
+
+
+def move(positions: dict) -> dict:
+    return {"type": "moveNodes", "opId": "x", "positions": positions}
+
+
+def update(node_id: str, patch: dict) -> dict:
+    return {"type": "updateNodeData", "opId": "x", "id": node_id, "patch": patch}
+
+
+def add(node_id: str, node_type: str, data: dict) -> dict:
+    node = {
+        "id": node_id,
+        "type": node_type,
+        "position": {"x": 0, "y": 0},
+        "data": data,
+    }
+    return {"type": "addNode", "opId": "x", "node": node}
+
+
+LPF = {"kind": "lpf", "value": 800, "q": 0.7}
 
 
 # TESTCLIENT CHEAT SHEET
@@ -237,3 +294,92 @@ def test_ops_are_checked_against_the_room_doc():
             "clientSeq": 1,
             "reason": "duplicate connection",
         }
+
+
+# 13. two cables that together would make a loop --> the first wins, the second is rejected
+#     - a adds a second filter f2 then wires n3 -> f2
+#     - b then wires f2 -> n3, which would close the loop n3 -> f2 -> n3
+def test_cycle_race_first_wins():
+    with two_clients() as (_, a, b):
+        send(a, add("f2", "filter", LPF), 1)
+        b.receive_json()  # b sees f2 now
+        assert send(a, connect("n3", "f2"), 2)["type"] == "op"
+        b.receive_json()  # b sees a's cable now
+        assert send(b, connect("f2", "n3"), 1) == {
+            "type": "reject",
+            "clientSeq": 1,
+            "reason": "would create a cycle",
+        }
+
+
+# 14. connecting to a node someone just deleted is rejected
+def test_connect_to_a_deleted_node_is_rejected():
+    with two_clients() as (_, a, b):
+        send(a, delete(["n2"]), 1)
+        b.receive_json()  # b sees the delete
+        assert send(b, connect("n1", "n2"), 1)["reason"] == "node does not exist"
+
+
+# 15. the same node dragged by two users --> both moves are accepted the last one wins
+def test_same_node_dragged_twice_last_wins():
+    with two_clients() as (room, a, b):
+        assert send(a, move({"n1": {"x": 1, "y": 1}}), 1)["type"] == "op"
+        b.receive_json()  # b sees a's move
+        assert send(b, move({"n1": {"x": 2, "y": 2}}), 1)["type"] == "op"
+        assert room_doc(room)["nodes"]["n1"]["position"] == {"x": 2, "y": 2}
+
+
+# 16. the same setting edited by two users: last one wins
+def test_same_setting_edited_twice_last_wins():
+    with two_clients() as (room, a, b):
+        send(a, {"type": "setSetting", "opId": "x", "patch": {"bpm": 100}}, 1)
+        b.receive_json()  # b sees bpm 100
+        send(b, {"type": "setSetting", "opId": "x", "patch": {"bpm": 120}}, 1)
+        assert room_doc(room)["settings"]["bpm"] == 120
+
+
+# 17. the same cable drawn by two users: the second is a duplicate
+#     (test 12 checks a duplicate against the starter; this one is two users racing)
+def test_same_cable_twice_second_is_rejected():
+    with two_clients() as (_, a, b):
+        send(a, add("f2", "filter", LPF), 1)
+        b.receive_json()  # b sees f2
+        assert send(a, connect("n2", "f2"), 2)["type"] == "op"
+        b.receive_json()  # b sees a's cable
+        assert send(b, connect("n2", "f2"), 1)["reason"] == "duplicate connection"
+
+
+# 18. delete beats edit: an edit to a node that was just deleted is rejected
+def test_delete_beats_edit():
+    with two_clients() as (_, a, b):
+        send(a, delete(["n3"]), 1)
+        b.receive_json()  # b sees the delete
+        assert (
+            send(b, update("n3", {"value": 500}), 1)["reason"] == "node does not exist"
+        )
+
+
+# 19. two users editing the same FX rack: the last whole list write wins
+#     (no per-row ops yet, so b's list replaces a's entirely, even though they touched different rows)
+def test_fx_rack_last_whole_list_wins():
+    room_row = {"id": "r1", "kind": "room", "value": 0.5, "on": True}
+    delay_row = {"id": "r2", "kind": "delay", "value": 0.25, "on": True}
+    with two_clients() as (room, a, b):
+        send(a, add("fx1", "fx", {"effects": []}), 1)
+        b.receive_json()  # b sees the rack
+        send(a, update("fx1", {"effects": [room_row]}), 2)
+        b.receive_json()  # b sees a's list
+        send(b, update("fx1", {"effects": [delay_row]}), 1)
+        assert room_doc(room)["nodes"]["fx1"]["data"]["effects"] == [delay_row]
+
+
+# 20. a drag that includes a node someone just deleted: the rest of the drag still lands
+def test_move_with_a_deleted_node_moves_the_rest():
+    with two_clients() as (room, a, b):
+        send(a, delete(["n1"]), 1)
+        b.receive_json()  # b sees the delete
+        both = {"n1": {"x": 9, "y": 9}, "n2": {"x": 5, "y": 5}}
+        assert send(b, move(both), 1)["type"] == "op"
+        doc = room_doc(room)
+        assert "n1" not in doc["nodes"]
+        assert doc["nodes"]["n2"]["position"] == {"x": 5, "y": 5}
