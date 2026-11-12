@@ -5,7 +5,13 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
-from app.protocol import ClientOpMessage, ServerOpMessage, SnapshotMessage
+from app.apply_op import Rejected
+from app.protocol import (
+    ClientOpMessage,
+    RejectMessage,
+    ServerOpMessage,
+    SnapshotMessage,
+)
 from app.rooms import get_room
 
 app = FastAPI(title="Music Canvas Sync Server")
@@ -42,7 +48,11 @@ async def room_socket(ws: WebSocket, room_id: str) -> None:
                 msg = ClientOpMessage.model_validate_json(text)
             except ValidationError:
                 continue
-            version = room.append(msg.op)
+            version = room.try_append(msg.op)
+            if isinstance(version, Rejected):
+                reject = RejectMessage(clientSeq=msg.clientSeq, reason=version.reason)
+                await ws.send_text(reject.model_dump_json())
+                continue
             out = ServerOpMessage(
                 op=msg.op, version=version, clientId=client_id, clientSeq=msg.clientSeq
             )

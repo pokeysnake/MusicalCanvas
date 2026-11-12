@@ -35,3 +35,11 @@ class ServerOpMessage(BaseModel):
     version: int
     clientId: str  # the sender id so the sender can spot its own echo
     clientSeq: int
+
+
+class RejectMessage(BaseModel):
+    """server -> the sender only its op failed apply_op and was not stored"""
+
+    type: Literal["reject"] = "reject"
+    clientSeq: int
+    reason: str
