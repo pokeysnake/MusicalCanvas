@@ -2,6 +2,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { barsOf, parseNotes, type StepView } from "@/model/notes";
 import { BEATS_PER_BAR } from "@/model/compile";
 import { layoutBars, type Piece } from "./notesLayout";
+import { usePartRef } from "@/canvas/partRefs";
 import "./notes-node.css";
 
 // a chord taller than this shows its first notes and "+N"
@@ -18,7 +19,8 @@ const LAYOUT = {
 const CARD_PADDING_PX = 28;
 const BAR_NUMBER_PX = 18; // the 1, 2, 3 column, only there when there's more than one row
 
-export default function NotesNode({ data }: NodeProps) {
+export default function NotesNode({ id, data }: NodeProps) {
+    const ref = usePartRef(id);
     const parsed = parseNotes(String(data.text ?? ""));
     const steps = parsed.ok ? parsed.steps : [];
     const bars = barsOf(steps);
@@ -38,7 +40,7 @@ export default function NotesNode({ data }: NodeProps) {
             )}
             <div className="notes-node__header">
                 <div className="notes-node__titles">
-                    <span className="notes-node__eyebrow">Notes</span>
+                    <span className="notes-node__eyebrow">Notes<span className="node-ref">{ref}</span></span>
                     <span className="notes-node__title">{String(data.name ?? "Untitled")}</span>
                 </div>
                 <span className="notes-node__meta" title={parsed.ok ? metaTitle : undefined}>{meta}</span>

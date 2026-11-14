@@ -14,7 +14,7 @@
   width: auto;
   padding: 0;
   border: none;
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
   font-size: inherit;
@@ -32,7 +32,7 @@
   padding: 12px 14px;
   background: var(--tile);
   border: 1px solid var(--tile-border);
-  border-radius: 14px;
+  border-radius: 0;
   color: var(--text);
   font-family: var(--font-sans);
 }
@@ -50,7 +50,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: 0;
   background: var(--tile-raised);
   color: var(--text);
   flex-shrink: 0;
@@ -93,12 +93,12 @@
 .output-node__bar {
   display: block;         /* spans are inline by default and ignore width/height */
   width: 4px;
-  border-radius: 2px;
+  border-radius: 0;
   background: var(--notes);
 }
 
 .output-node__bar--peak {
-  background: var(--filter);
+  background: var(--red);
 }
 
 /* ---------- Handle (input only, hollow amber ring) ---------- */

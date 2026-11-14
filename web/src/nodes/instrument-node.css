@@ -8,7 +8,7 @@
 .react-flow__node-instrument:hover {
   padding: 0;
   border: none;
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -23,7 +23,7 @@
   padding: 12px 14px;
   background: var(--tile);
   border: 1px solid var(--tile-border);
-  border-radius: 14px;
+  border-radius: 0;
   color: var(--text);
   font-family: var(--font-sans);
 }
@@ -40,7 +40,7 @@
   justify-content: center;
   width: 32px;
   height: 32px;
-  border-radius: 9px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--instrument) 14%, transparent);
   color: var(--instrument);
   flex-shrink: 0;
@@ -70,7 +70,7 @@
 .instrument-node__sound:focus-visible {
   outline: 2px solid var(--instrument);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* ---------- Mute / Solo ---------- */
@@ -83,7 +83,7 @@
 .instrument-node__btn {
   width: 28px;
   height: 28px;
-  border-radius: 7px;
+  border-radius: 0;
   border: 1px solid var(--tile-border);
   background: var(--tile-raised);
   color: var(--muted-on-tile);

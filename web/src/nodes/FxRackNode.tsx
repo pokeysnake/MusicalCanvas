@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, SlidersHorizontal, X } from "lucide-react";
 import { FILTERS, Q, type FilterKind } from "@/model/filters";
 import type { FxEffect } from "@/model/types";
 import { useUpdateNodeData } from "@/canvas/dispatch";
+import { usePartRef } from "@/canvas/partRefs";
 import {
     DropdownMenu, DropdownMenuContent, DropdownMenuGroup, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator,
     DropdownMenuTrigger,
@@ -59,6 +60,7 @@ const MENU_GROUPS = [
 export default function FxRackNode({ id, data }: NodeProps) {
     const effects = (data.effects ?? []) as FxEffect[];
     const update = useUpdateNodeData(id);
+    const ref = usePartRef(id);
     const setEffects = (next: FxEffect[]) => update({ effects: next });
     const patchRow = (rowId: string, patch: Partial<FxEffect>) =>
         setEffects(effects.map((e) => (e.id === rowId ? { ...e, ...patch } : e)));
@@ -106,7 +108,7 @@ export default function FxRackNode({ id, data }: NodeProps) {
             <div className="fx-rack__header">
                 <div className="fx-rack__icon" aria-hidden="true"><SlidersHorizontal size={14} /></div>
                 <div className="fx-rack__titles">
-                    <span className="fx-rack__eyebrow">FX Rack</span>
+                    <span className="fx-rack__eyebrow">FX Rack<span className="node-ref">{ref}</span></span>
                     <span className="fx-rack__title">{effects.length} effect{effects.length === 1 ? "" : "s"}</span>
                 </div>
                 <button type="button" className="fx-rack__fold nodrag" onClick={() => setCollapsed(!collapsed)}

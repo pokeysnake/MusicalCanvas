@@ -1,9 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type DragEvent } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState, type CSSProperties, type DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import {
-    Background, Controls, NodeToolbar, ReactFlow, ReactFlowProvider, useReactFlow,
+    Background, BackgroundVariant, ConnectionLineType, Controls, NodeToolbar, ReactFlow, ReactFlowProvider, useReactFlow,
     type Connection, type Edge, type EdgeChange, type Node, type NodeChange,
 } from "@xyflow/react";
 
@@ -12,6 +12,7 @@ import { applyOp } from "@/model/applyOp";
 import { initialSync, syncReducer } from "@/sync/optimistic";
 import { emptyUi, GROUP_PREFIX, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
 import { DispatchProvider } from "@/canvas/dispatch";
+import { partRefs, PartRefsProvider } from "@/canvas/partRefs";
 import { bpmOp, deleteOp, moveOp } from "@/canvas/ops";
 import { catGroups, dragHint, snapPositions } from "@/canvas/sequence";
 
@@ -30,8 +31,7 @@ import CatGroupNode from "@/nodes/CatGroupNode";
 import CableEdge from "@/canvas/CableEdge";
 import NotesEditor, { type Rect } from "@/ui/NotesEditor";
 import ShareButton from "@/ui/ShareButton";
-import GooButton from "@/ui/GooButton";
-import { Play, Square } from "lucide-react";
+import { Square } from "lucide-react";
 import { BEATS_PER_BAR, compile } from "@/model/compile";
 import { issueText } from "@/canvas/issues";
 import { useRoomSocket } from "@/sync/useRoomSocket";
@@ -75,7 +75,7 @@ const BPM_MAX = 240;
    ===================================================================== */
 function Editor({ roomId }: { roomId: string | null }) {
     /* ---------- State ---------- */
-    const [{ doc, error: opError }, act] = useReducer(syncReducer, initialDoc, initialSync);
+    const [{ doc, error: opError, version }, act] = useReducer(syncReducer, initialDoc, initialSync);
 
     /* Optimistic (Stage 6): every op shows up on screen at once.
        Room: send it first to learn its clientSeq, then apply it as pending; the echo confirms it,
@@ -103,6 +103,10 @@ function Editor({ roomId }: { roomId: string | null }) {
     const groups = useMemo(() => catGroups(doc, ui.drag, (id) => ui.dims[id]), [doc, ui.drag, ui.dims]);
     const nodes = useMemo(() => toFlowNodes(doc, ui, live, groups), [doc, ui, live, groups]);
     const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
+    // part numbers (N1, I1 ...) only change when parts are added or removed, so the context value is keyed on
+    // their JSON: an ordinary edit or move keeps the same object and doesn't re-render every node
+    const refsJson = JSON.stringify(partRefs(doc));
+    const refs = useMemo(() => JSON.parse(refsJson) as Record<string, string>, [refsJson]);
     const [tab, setTab] = useState<"graph" | "strudel">("graph");
     const [error, setError] = useState<string | null>(null);
     const { screenToFlowPosition, getNode } = useReactFlow();
@@ -326,7 +330,9 @@ function Editor({ roomId }: { roomId: string | null }) {
     // DispatchProvider lets node components send ops (React Flow renders them, so no props from here)
     return (
         <DispatchProvider dispatch={dispatch}>
-            <div className="app">
+          <PartRefsProvider refs={refs}>
+            {/* --beat: one beat in seconds, so the wires' play pulse moves in time with the song (theme.css) */}
+            <div className={"app" + (playing ? " is-playing" : "")} style={{ "--beat": `${60 / bpm}s` } as CSSProperties}>
                 <header className="topbar">
                     <label>
                         BPM{" "}
@@ -349,13 +355,13 @@ function Editor({ roomId }: { roomId: string | null }) {
                         title={`Strudel counts time in cycles. Here one cycle is one bar of ${BEATS_PER_BAR} beats, so cycles per minute (CPM) = BPM ÷ ${BEATS_PER_BAR}. Everything in a Notes node plays within one bar.`}>
                         {BEATS_PER_BAR} beats/bar · {round(bpm / BEATS_PER_BAR, 2)} CPM · {round((60 * BEATS_PER_BAR) / bpm, 2)}s per bar
                     </span>
-                    {/* squishy buttons; Play gently breathes while the song plays */}
-                    <GooButton onClick={onPlay} color="var(--accent)" ink="var(--accent-ink)" active={playing}>
-                        <Play size={14} fill="currentColor" /> Play
-                    </GooButton>
-                    <GooButton onClick={onStop} color="var(--tile-border)" ink="var(--text)">
-                        <Square size={12} fill="currentColor" /> Stop
-                    </GooButton>
+                    {/* square keys that push down when pressed; Play's red lamp lights and pulses while the song plays */}
+                    <button type="button" className={"btn btn--play" + (playing ? " is-on" : "")} onClick={onPlay}>
+                        <span className="btn__lamp" aria-hidden="true" /> Play
+                    </button>
+                    <button type="button" className="btn" onClick={onStop}>
+                        <Square size={9} fill="currentColor" /> Stop
+                    </button>
                     {/* per-listener volume: local, never an op, so it isn't shared with collaborators */}
                     <label className="vol">
                         Vol
@@ -397,10 +403,13 @@ function Editor({ roomId }: { roomId: string | null }) {
                             onBeforeDelete={onBeforeDelete} onDelete={onDelete}
                             onConnect={onConnect} isValidConnection={isValidConnection}
                             onDragOver={onDragOver} onDrop={onDrop}
+                            connectionLineType={ConnectionLineType.Step}
                             colorMode="dark" fitView
                         >
-                            <Background />
-                            <Controls />
+                            {/* graph paper: fine 8px grid under a heavier 40px one; both pan and zoom with the drawing */}
+                            <Background id="grid-minor" variant={BackgroundVariant.Lines} gap={8} lineWidth={1} color="var(--fainter)" />
+                            <Background id="grid-major" variant={BackgroundVariant.Lines} gap={40} lineWidth={1} color="var(--faint)" />
+                            <Controls showInteractive={false} />
                             {/* drag tooltip: where a Notes plays in its cat sequence, or why height doesn't matter */}
                             {hint && leadId && (
                                 <NodeToolbar nodeId={leadId} isVisible
@@ -409,13 +418,20 @@ function Editor({ roomId }: { roomId: string | null }) {
                                 </NodeToolbar>
                             )}
                         </ReactFlow>
+                        {/* drafting title block: which drawing this is and its revision (the op-log version) */}
+                        <div className="titleblock" aria-hidden="true">
+                            <span>Title</span><span>music canvas / {roomId ? `room ${roomId.slice(0, 4)}` : "solo"}</span>
+                            <span>Rev</span><span>v{version} (ops)</span>
+                            <span>Parts</span><span>{Object.keys(doc.nodes).length}</span>
+                        </div>
                     </div>
                     {tab === "strudel" && <pre className="code">{code}</pre>}
                 </section>
 
                 <aside className="side">
+                    <div className="brand">Music Canvas</div>
                     <h4>Collaborators</h4>
-                    <div className="who">● You</div>
+                    <div className="who">you</div>
 
                     <h4>Nodes</h4>
                     {PALETTE_NODES.map((item) => (
@@ -446,6 +462,7 @@ function Editor({ roomId }: { roomId: string | null }) {
                         from={editingAt?.from ?? null} onClose={() => setEditingAt(null)} />
                 )}
             </div>
+          </PartRefsProvider>
         </DispatchProvider>
     );
 }

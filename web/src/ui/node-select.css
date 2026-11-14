@@ -19,9 +19,10 @@
 .node-select {
   min-width: 190px;
   max-height: min(340px, var(--radix-dropdown-menu-content-available-height));
-  border-radius: 10px;
+  border-radius: 0;
   font-family: var(--font-sans);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  border-width: var(--stroke);
+  box-shadow: 3px 3px 0 var(--tile-border);
   /* long lists (sounds) still scroll with the wheel / trackpad / arrow keys, but with no visible scrollbar,
      so every dropdown looks the same */
   scrollbar-width: none;
@@ -34,7 +35,7 @@
   text-transform: uppercase;
   color: var(--nc);
 }
-.node-select__item { cursor: pointer; border-radius: 6px; }
+.node-select__item { cursor: pointer; border-radius: 0; }
 /* the tick on the current value, in the node colour */
 .node-select__item svg { color: var(--nc) !important; fill: var(--nc); }
 .node-select__name { flex: 1; }

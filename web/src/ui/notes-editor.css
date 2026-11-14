@@ -35,7 +35,8 @@
   width: min(520px, 100%);
   padding: 16px;
   background: var(--tile);
-  border: 1px solid var(--notes-chip-border);
+  border: var(--stroke) solid var(--ink);
+  box-shadow: 4px 4px 0 var(--tile-border);
   pointer-events: auto;
 }
 .notes-editor__content { display: flex; flex-direction: column; gap: 12px; }
@@ -54,7 +55,7 @@
   margin: -4px -6px 0;
   padding: 4px 6px;
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   color: var(--notes);
   font: 600 16px var(--font-sans);
@@ -72,7 +73,7 @@
   min-height: 80px;
   padding: 10px;
   resize: vertical;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--tile-raised);
   border: 1px solid var(--tile-border);
   color: var(--text);
@@ -85,7 +86,7 @@
 
 .notes-editor__chip {
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--notes-chip);
   border: 1px solid var(--notes-chip-border);
   font: 13px var(--font-mono);
@@ -93,19 +94,25 @@
 
 .notes-editor__error { display: flex; flex-direction: column; gap: 4px; color: var(--error); font-size: 12px; }
 .notes-editor__error code { font: 13px var(--font-mono); color: var(--text); white-space: pre-wrap; }
-.notes-editor__error mark { background: var(--error); color: var(--bg); border-radius: 2px; }
+.notes-editor__error mark { background: var(--error); color: var(--bg); border-radius: 0; }
 
 .notes-editor__actions { display: flex; align-items: center; gap: 8px; }
 .notes-editor__hint { margin-right: auto; font-size: 12px; color: var(--muted); }
 
+/* same square, inked buttons as the top bar (.btn in globals.css) */
 .notes-editor button {
-  padding: 6px 14px;
-  border: none;
-  border-radius: 8px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  font-weight: 600;
+  padding: 5px 12px;
+  border: var(--stroke) solid var(--ink);
+  border-radius: 0;
+  background: var(--ink);
+  color: var(--paper);
+  font: 500 12px var(--font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
+  box-shadow: 2px 2px 0 var(--tile-border);
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out;
 }
-.notes-editor button.secondary { background: var(--tile-raised); color: var(--text); }
+.notes-editor button:active:not(:disabled) { transform: translate(2px, 2px); box-shadow: none; }
+.notes-editor button.secondary { background: transparent; color: var(--text); }
 .notes-editor button:disabled { opacity: 0.4; cursor: not-allowed; }

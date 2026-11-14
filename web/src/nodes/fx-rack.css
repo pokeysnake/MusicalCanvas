@@ -6,7 +6,7 @@
 .react-flow__node-fx:hover {
   padding: 0;
   border: none;
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -17,7 +17,7 @@
   width: 290px;
   background: var(--tile);
   border: 1px solid var(--tile-border);
-  border-radius: 14px;
+  border-radius: 0;
   color: var(--text);
   font-family: var(--font-sans);
   transition: box-shadow 0.15s, border-color 0.15s;
@@ -36,7 +36,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--nc) 16%, transparent);
   color: var(--nc);
 }
@@ -55,7 +55,7 @@
   width: 24px;
   height: 24px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 0;
   background: var(--tile-raised);
   color: var(--muted);
   cursor: pointer;
@@ -71,7 +71,7 @@
   gap: 8px;
   height: 32px;
   padding: 0 6px;
-  border-radius: 8px;
+  border-radius: 0;
 }
 .fx-rack__row:hover { background: var(--tile-raised); }
 /* a filter's Q: a slim row tucked under its main row (same columns, so the sliders line up) */
@@ -83,20 +83,19 @@
 .fx-rack__row.is-off .fx-rack__value,
 .fx-rack__row.is-off .fx-rack__slider { opacity: 0.4; }
 
-/* bypass light: glowing when on, dark when bypassed */
+/* bypass switch: a filled dot when on, hollow (red ring) when bypassed */
 .fx-rack__led {
-  width: 12px;
-  height: 12px;
+  width: 10px;
+  height: 10px;
   padding: 0;
-  border: 1px solid color-mix(in srgb, var(--nc) 50%, #000);
+  border: var(--stroke) solid var(--ink);
   border-radius: 50%;
-  background: #14100d;
+  background: transparent;
   cursor: pointer;
+  transition: background-color 100ms;
 }
-.fx-rack__led[aria-pressed="true"] {
-  background: radial-gradient(circle at 35% 35%, #fff8 0 15%, var(--nc) 45%);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--nc) 70%, transparent);
-}
+.fx-rack__led[aria-pressed="true"] { background: var(--ink); }
+.fx-rack__led[aria-pressed="false"] { border-color: var(--red); }
 
 .fx-rack__name { font-size: 12px; font-weight: 600; white-space: nowrap; }
 
@@ -121,7 +120,7 @@
   height: 18px;
   padding: 0;
   border: 0;
-  border-radius: 4px;
+  border-radius: 0;
   background: transparent;
   color: var(--muted);
   opacity: 0;
@@ -137,7 +136,7 @@
   margin: 4px 14px 12px;
   padding: 6px 0;
   border: 1px dashed var(--tile-border);
-  border-radius: 8px;
+  border-radius: 0;
   background: transparent;
   text-align: center;
   font-size: 12px;
@@ -152,9 +151,10 @@
 .fx-menu {
   --nc: var(--filter);
   min-width: 200px;
-  border-radius: 10px;
+  border-radius: 0;
   font-family: var(--font-sans);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  border-width: var(--stroke);
+  box-shadow: 3px 3px 0 var(--tile-border);
 }
 .fx-menu__label {
   font-size: 10px;
@@ -163,7 +163,7 @@
   text-transform: uppercase;
   color: var(--nc);
 }
-.fx-menu__item { gap: 10px; cursor: pointer; border-radius: 6px; }
+.fx-menu__item { gap: 10px; cursor: pointer; border-radius: 0; }
 .fx-menu__dot {
   width: 8px;
   height: 8px;
@@ -179,7 +179,7 @@
 .fx-rack__chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 12px 12px; }
 .fx-rack__chip {
   padding: 3px 8px;
-  border-radius: 6px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--nc) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--nc) 45%, transparent);
   color: var(--nc);
@@ -193,7 +193,7 @@
   inset: 0;
   display: grid;
   place-items: center;
-  border-radius: 14px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--nc) 18%, transparent);
   border: 2px dashed var(--nc);
   color: var(--nc);

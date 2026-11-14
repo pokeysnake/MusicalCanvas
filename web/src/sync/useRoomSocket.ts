@@ -23,7 +23,7 @@ export function useRoomSocket(roomId: string | null, act: Dispatch<SyncAction>) 
   useEffect(() => {
     if (!roomId) return;
     const socket = connectRoom(`${WS_URL}/ws/${roomId}`, {
-      onSnapshot: (doc, clientId) => act({ type: "snapshot", doc, clientId }),
+      onSnapshot: (doc, clientId, version) => act({ type: "snapshot", doc, clientId, version }),
       onOp: (msg) => act({ type: "remote", msg }),
       onReject: (msg) => act({ type: "reject", clientSeq: msg.clientSeq, reason: msg.reason }),
       onStatus: setStatus,

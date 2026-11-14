@@ -1,94 +1,146 @@
 /* =====================================================================================
    Theme layer on top of the node components (colours themselves are tokens in globals.css :root).
-   Chosen direction: "Warm Analog" (design/music-theme-directions.md). Built theme-ready:
-   - shared patterns below apply to every theme;
-   - finishes that are specific to a look sit under html[data-theme="analog"] (set in layout.tsx),
+   Chosen direction: "Schematic Dark" (vault: Design/Design Mockups 2026-11-11.md).
+   - shared patterns apply to every theme;
+   - finishes specific to the look sit under html[data-theme="schematic"] (set in layout.tsx),
      so another theme could be added later with its own block.
    Selectors start with `html` on purpose: it out-ranks the node files' own rules (.notes-node etc.),
    which load after this file.
    ===================================================================================== */
 
-/* ---------- Each node type's own colour (--nc) ---------- */
+/* ---------- Each node type's own colour (--nc): ink, except the Output ---------- */
 html .notes-node { --nc: var(--notes); }
 html .instrument-node { --nc: var(--instrument); }
 html .filter-node { --nc: var(--filter); }
 html .output-node { --nc: var(--output); }
-html .fx-rack { --nc: var(--filter); } /* a box of filters */
+html .fx-rack { --nc: var(--filter); }
 
-/* ---------- Faceplate: coloured strip along the top, tinted border, a little depth ---------- */
-html :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
-  position: relative; /* anchors the strip below */
-  background-color: var(--tile);
-  border-color: color-mix(in srgb, var(--nc) 38%, var(--tile-border));
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35);
+/* eyebrow labels ("NOTES", "FILTER", ...) */
+html :is(.notes-node__eyebrow, .instrument-node__eyebrow, .filter-node__eyebrow, .output-node__eyebrow, .fx-rack__eyebrow) {
+  color: var(--nc);
+  letter-spacing: 0.14em;
 }
-/* The strip is an overlay that sits ON the card's border (inset -1px) instead of an inset shadow inside it:
-   an inset shadow leaves a hairline seam against the border at some zoom levels. A 4px top border on a
-   rounded box tapers into the corners on its own. */
-html :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack)::before {
-  content: "";
-  position: absolute;
-  inset: -1px;
-  border-top: 4px solid var(--nc);
-  border-radius: 15px; /* card radius 14 + the 1px it sticks out */
-  pointer-events: none;
+
+/* =====================================================================================
+   Schematic finishes
+   ===================================================================================== */
+
+/* ---------- Parts: a lighter sheet with an inked outline, square corners, no shadow ---------- */
+html[data-theme="schematic"] :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
+  background: var(--tile);
+  border: var(--stroke) solid var(--ink);
+  border-radius: 0;
+  box-shadow: none;
+  transition: box-shadow 120ms ease-out;
 }
-html .react-flow__node.selected :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
-  border-color: var(--nc);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc) 30%, transparent), 0 10px 28px rgba(0, 0, 0, 0.35);
+/* the Output is the one red part on the drawing */
+html[data-theme="schematic"] .output-node { border: 2px solid var(--red); }
+
+/* header rules are inked like the outline */
+html[data-theme="schematic"] :is(.notes-node__header, .filter-node__header, .fx-rack__header) {
+  border-bottom: var(--stroke) solid var(--ink);
 }
-/* eyebrow labels ("NOTES", "FILTER", ...) in the node's colour */
-html :is(.notes-node__eyebrow, .instrument-node__eyebrow, .filter-node__eyebrow, .output-node__eyebrow) {
+
+/* selected: a red ring a little way out from the part, like a reviewer's mark */
+html[data-theme="schematic"] .react-flow__node.selected :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
+  box-shadow: 0 0 0 4px var(--paper), 0 0 0 5.5px var(--red);
+}
+
+/* not reaching the Output: a dashed outline (a part drawn in but not fitted yet) */
+html[data-theme="schematic"] .react-flow__node.is-silent :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
+  border-style: dashed;
+}
+
+/* part number (N1, I1, F1, FX1, OUT), derived in canvas/flow.ts; display only */
+html .node-ref {
+  margin-left: 6px;
+  font: 600 11px var(--font-mono);
+  letter-spacing: 0;
+  color: var(--text);
+}
+html .output-node .node-ref { display: none; } /* "OUTPUT OUT" says it twice */
+
+/* the little symbol boxes (waveform, filter curve, speaker) are drawn like schematic symbols: outlined, square */
+html[data-theme="schematic"] :is(.instrument-node__icon, .filter-node__icon, .output-node__icon, .fx-rack__icon) {
+  border: 1px solid var(--nc);
+  border-radius: 0;
+  background: transparent;
   color: var(--nc);
 }
 
-/* ---------- Handles become jack sockets: dark hole ringed in the node colour ---------- */
-html :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) .react-flow__handle {
-  width: 14px;
-  height: 14px;
-  background: radial-gradient(circle, #050608 0 38%, color-mix(in srgb, var(--nc) 70%, #000) 42% 100%);
-  border: 2px solid var(--nc);
-}
-
-/* ---------- Sidebar palette chips: a dot in the colour of the node they create ---------- */
-html .chip[data-type="notes"] { --nc: var(--notes); }
-html .chip[data-type="instrument"] { --nc: var(--instrument); }
-html .chip[data-type="filter"],
-html .chip[data-type="fx"] { --nc: var(--filter); }
-html .side .chip::before {
-  content: "";
-  flex: none;
+/* ---------- Handles: pins. Inputs hollow, outputs filled; they turn red when a wire can land on them ---------- */
+html[data-theme="schematic"] :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) .react-flow__handle {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--nc, var(--muted));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--nc, var(--muted)) 22%, transparent);
+  border: var(--stroke) solid var(--ink);
+  background: var(--paper);
+  transition: scale 100ms ease-out, background-color 100ms, border-color 100ms;
 }
-/* the FX Rack chip gets a square "pedal" mark instead of a dot */
-html .side .chip[data-type="fx"]::before { border-radius: 3px; }
-
-/* ---------- Patch cables (canvas/CableEdge.tsx) ---------- */
-html .cable path { fill: none; stroke-linecap: round; }
-html .cable__shadow { stroke: rgba(0, 0, 0, 0.5); stroke-width: 9; }
-html .cable__core { stroke-width: 5; transition: stroke-width 0.15s; }
-html .cable__sheen { stroke: rgba(255, 255, 255, 0.3); stroke-width: 1.2; transform: translateY(-1.2px); }
-html .cable__plug { stroke: rgba(0, 0, 0, 0.5); stroke-width: 1; }
-html .cable.is-selected .cable__core { stroke-width: 7; }
-
-/* =====================================================================================
-   Warm Analog finishes
-   ===================================================================================== */
-
-/* felt / paper grain on every node (SVG noise, no image file) */
-html[data-theme="analog"] :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) {
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='400'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1  0 0 0 0 0.95  0 0 0 0 0.85  0 0 0 0.09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"),
-    linear-gradient(180deg, rgba(255, 240, 220, 0.04), transparent 50%);
-  /* one stretched tile, not a repeating 140px one: repeated SVG tiles show seams at some zoom levels */
-  background-size: cover, auto;
-  background-repeat: no-repeat;
+html[data-theme="schematic"] :is(.notes-node, .instrument-node, .filter-node, .output-node, .fx-rack) .react-flow__handle.source {
+  background: var(--ink);
 }
+html[data-theme="schematic"] .output-node .react-flow__handle { border-color: var(--red); }
+html[data-theme="schematic"] .react-flow__handle:hover,
+html[data-theme="schematic"] .react-flow__handle.connectingto.valid {
+  scale: 1.4; /* the scale property, not transform: React Flow positions handles with transform */
+  border-color: var(--red);
+}
+html[data-theme="schematic"] .react-flow__handle.connectingto.valid { background: var(--red); }
 
-/* braided cloth cables (tight dash pattern), only a faint sheen */
-html[data-theme="analog"] .cable__core { stroke-dasharray: 6 2.5; stroke-linecap: butt; }
-html[data-theme="analog"] .cable__sheen { stroke: rgba(255, 245, 230, 0.12); }
+/* ---------- Parts list in the sidebar: each chip shows the letter its part number will start with ---------- */
+html .side .chip::before {
+  flex: none;
+  min-width: 22px;
+  font: 600 11px var(--font-mono);
+  color: var(--muted);
+}
+html .side .chip[data-type="notes"]::before { content: "N"; }
+html .side .chip[data-type="instrument"]::before { content: "I"; }
+html .side .chip[data-type="fx"]::before { content: "FX"; }
+html .side .chip[data-type="filter"]::before { content: "F"; }
+
+/* ---------- Wires (canvas/CableEdge.tsx): right-angle runs, arrowheads, junction dots ---------- */
+html .wire path { fill: none; }
+html .wire__line {
+  stroke: var(--ink);
+  stroke-width: 1.6;
+  stroke-linejoin: miter;
+  /* drawn in like a pen stroke when the wire first appears (pathLength=1 on the path) */
+  stroke-dasharray: 1;
+  animation: wire-draw 380ms ease-out both;
+  transition: stroke 120ms;
+}
+html .wire__arrow,
+html .wire__dot {
+  fill: var(--ink);
+  animation: wire-ends 140ms ease-out 300ms both;
+  transition: fill 120ms;
+}
+html .wire.is-selected .wire__line { stroke: var(--red); stroke-width: 2; }
+html .wire.is-selected :is(.wire__arrow, .wire__dot) { fill: var(--red); }
+html .wire:hover .wire__line { stroke-width: 2.2; }
+
+@keyframes wire-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes wire-ends { from { opacity: 0; } to { opacity: 1; } }
+
+/* while the song plays, red pulses travel along every wire toward the Output, one dash per beat
+   (--beat is set on .app from the BPM in EditorApp) */
+html .wire__flow {
+  stroke: var(--red);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-dasharray: 1.5 22.5;
+  opacity: 0;
+  transition: opacity 200ms;
+}
+html .app.is-playing .wire__flow {
+  opacity: 0.9;
+  animation: wire-flow var(--beat, 0.5s) linear infinite;
+}
+@keyframes wire-flow { to { stroke-dashoffset: -24; } }
+
+@media (prefers-reduced-motion: reduce) {
+  html .wire__line, html .wire__arrow, html .wire__dot { animation: none; }
+  html .app.is-playing .wire__flow { animation: none; opacity: 0; }
+}

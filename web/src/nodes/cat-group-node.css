@@ -1,4 +1,5 @@
-/* ---------- Cat group frame (CatGroupNode.tsx) ---------- */
+/* ---------- Cat group frame (CatGroupNode.tsx) ----------
+   Drawn like a dashed sub-assembly box on a schematic, with its label sitting on the top line. */
 
 /* display only: let clicks and drags go through to the canvas / nodes underneath */
 .react-flow__node-catGroup {
@@ -9,36 +10,34 @@
   position: relative;
   width: 100%;
   height: 100%;
-  border: 1px solid color-mix(in srgb, var(--instrument) 45%, transparent); /* --instrument, faded */
-  background: color-mix(in srgb, var(--instrument) 6%, transparent);
-  border-radius: 20px;
+  border: var(--stroke) dashed var(--muted);
+  border-radius: 0;
 }
 
-/* the label tab is the group's drag handle, so it (alone) takes clicks */
+/* the label tab is the group's drag handle, so it (alone) takes clicks; it breaks the top line */
 .cat-group__tab {
   position: absolute;
-  top: 8px;
+  top: -9px;
   left: 50%;
   transform: translateX(-50%); /* centred along the top edge */
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 2px 8px 2px 4px;
-  border-radius: 6px;
+  padding: 0 8px 0 4px;
+  background: var(--paper);
   pointer-events: auto;
   cursor: grab;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
+  font: 500 11px var(--font-sans);
+  letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--instrument);
+  color: var(--muted);
   white-space: nowrap;
 }
-.cat-group__tab:hover { background: color-mix(in srgb, var(--instrument) 12%, transparent); }
-.react-flow__node-catGroup.dragging .cat-group__tab { cursor: grabbing; background: color-mix(in srgb, var(--instrument) 18%, transparent); }
-.react-flow__node-catGroup.dragging .cat-group { border-color: color-mix(in srgb, var(--instrument) 60%, transparent); }
+.cat-group__tab:hover { color: var(--text); }
+.react-flow__node-catGroup.dragging .cat-group__tab { cursor: grabbing; color: var(--text); }
+.react-flow__node-catGroup.dragging .cat-group { border-color: var(--text); }
 
-/* the links between Notes, in play order; dashes flow from one Notes to the next */
+/* the links between Notes, in play order; dashes march from one Notes to the next */
 .cat-group__links {
   position: absolute;
   inset: 0;
@@ -47,10 +46,9 @@
   overflow: visible;
 }
 .cat-group__links line {
-  stroke: var(--notes);
-  stroke-width: 2;
-  stroke-linecap: round;
-  stroke-dasharray: 3 6;
+  stroke: var(--ink);
+  stroke-width: 1.4;
+  stroke-dasharray: 6 3;
   animation: cat-flow 0.9s linear infinite;
 }
 @keyframes cat-flow {
@@ -67,9 +65,9 @@
   height: 18px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
-  background: var(--tile);
-  border: 1px solid var(--notes-chip-border);
-  color: var(--notes);
+  background: var(--paper);
+  border: var(--stroke) solid var(--ink);
+  color: var(--ink);
 }
 
 @media (prefers-reduced-motion: reduce) {

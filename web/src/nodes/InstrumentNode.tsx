@@ -3,6 +3,7 @@ import { Handle, Position, type NodeProps } from "@xyflow/react";
 import { useUpdateNodeData } from "@/canvas/dispatch";
 import { DEFAULT_SOUND, SOUNDS } from "@/model/sounds";
 import NodeSelect, { type SelectOption } from "@/ui/NodeSelect";
+import { usePartRef } from "@/canvas/partRefs";
 import "./instrument-node.css";
 
 const CATEGORY_LABEL: Record<(typeof SOUNDS)[number]["category"], string> = {
@@ -14,6 +15,7 @@ const SOUND_OPTIONS: SelectOption[] = SOUNDS.map((s) => ({ value: s.id, label: s
 export default function InstrumentNode({ id, data }: NodeProps) {
   // select + toggle buttons are single discrete actions, so they dispatch right away
   const update = useUpdateNodeData(id);
+  const ref = usePartRef(id);
   const sound = String(data.sound ?? DEFAULT_SOUND);
   const muted = Boolean(data.muted);
   const solo = Boolean(data.solo);
@@ -30,7 +32,7 @@ export default function InstrumentNode({ id, data }: NodeProps) {
       </div>
 
       <div className="instrument-node__titles">
-        <span className="instrument-node__eyebrow">Instrument</span>
+        <span className="instrument-node__eyebrow">Instrument<span className="node-ref">{ref}</span></span>
         {/* themed dropdown (the native select's menu is always white), sounds grouped like strudel.cc's tabs */}
         <NodeSelect className="instrument-node__sound" label="Sound" color="var(--instrument)"
           value={sound} options={SOUND_OPTIONS} onChange={(v) => update({ sound: v })} />
@@ -46,4 +48,4 @@ export default function InstrumentNode({ id, data }: NodeProps) {
       <Handle type="source" position={Position.Right} />
     </div>
   );
-}
+}

@@ -8,7 +8,7 @@
 .react-flow__node-filter:hover {
   padding: 0;
   border: none;
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -18,7 +18,7 @@
   width: 240px;
   background: var(--tile);
   border: 1px solid var(--tile-border);
-  border-radius: 14px;
+  border-radius: 0;
   color: var(--text);
   font-family: var(--font-sans);
 }
@@ -43,7 +43,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 0;
   background: color-mix(in srgb, var(--filter) 14%, transparent);
   color: var(--filter);
   flex-shrink: 0;
@@ -73,7 +73,7 @@
 .filter-node__kind:focus-visible {
   outline: 2px solid var(--filter);
   outline-offset: 2px;
-  border-radius: 4px;
+  border-radius: 0;
 }
 
 /* ---------- Body ---------- */
@@ -115,7 +115,7 @@
   min-width: 0;
   height: 30px;
   padding: 0 8px;
-  border-radius: 7px;
+  border-radius: 0;
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--text);

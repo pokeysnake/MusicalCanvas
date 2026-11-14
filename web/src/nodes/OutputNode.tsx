@@ -1,8 +1,10 @@
 "use client";
-import { Handle, Position } from "@xyflow/react";
+import { Handle, Position, type NodeProps } from "@xyflow/react";
+import { usePartRef } from "@/canvas/partRefs";
 import "./output-node.css";
 
-export default function OutputNode() {
+export default function OutputNode({ id }: NodeProps) {
+    const ref = usePartRef(id);
     return (
         <div className="output-node">
             <Handle type="target" position={Position.Left} />
@@ -18,7 +20,7 @@ export default function OutputNode() {
 
             {/* TITLE */}
             <div className="output-node__titles">
-                <span className="output-node__eyebrow">Output</span>
+                <span className="output-node__eyebrow">Output<span className="node-ref">{ref}</span></span>
                 <span className="output-node__title">Speakers</span>
             </div>
 

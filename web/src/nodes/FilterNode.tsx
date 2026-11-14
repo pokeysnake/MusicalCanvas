@@ -6,6 +6,7 @@ import "./filter-node.css";
 
 import { FILTERS, Q, type FilterKind } from "@/model/filters";
 import { useUpdateNodeData } from "@/canvas/dispatch";
+import { usePartRef } from "@/canvas/partRefs";
 import NodeSelect, { type SelectOption } from "@/ui/NodeSelect";
 
 // built once from the FILTERS table; frequency filters vs level/space effects, with each one's unit as a hint
@@ -31,6 +32,7 @@ const blurOnEnter = (e: KeyboardEvent<HTMLInputElement>) => {
 
 export default function FilterNode({ id, data }: NodeProps) {
   const update = useUpdateNodeData(id);
+  const ref = usePartRef(id);
 
   /* ---------- Current values from node data ---------- */
   const kind = (data.kind as FilterKind) ?? "lpf";
@@ -78,7 +80,7 @@ export default function FilterNode({ id, data }: NodeProps) {
           </svg>
         </div>
         <div className="filter-node__titles">
-          <span className="filter-node__eyebrow">Filter</span>
+          <span className="filter-node__eyebrow">Filter<span className="node-ref">{ref}</span></span>
           {/* themed dropdown (the native select's menu is always white) */}
           <NodeSelect className="filter-node__kind" label="Filter type" color="var(--filter)"
             value={kind} options={KIND_OPTIONS} onChange={(v) => changeKind(v as FilterKind)} />
@@ -124,4 +126,4 @@ export default function FilterNode({ id, data }: NodeProps) {
       <Handle type="source" position={Position.Right} />
     </div>
   );
-}
+}

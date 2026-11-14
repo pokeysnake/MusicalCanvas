@@ -1,42 +1,20 @@
-/* ---------- Gooey Share / Copy link button (ShareButton.tsx) ---------- */
-.share-goo {
+/* ---------- Share / Copy link button (ShareButton.tsx) ----------
+   The look comes from .btn (globals.css); this only stacks the label faces for the flip. */
+.share-btn {
   position: relative;
   flex: none;
-}
-
-.share-goo__shapes {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-/* pill colour: a bit lighter than the old secondary button, since the goo can't draw a border */
-.share-goo__pill {
-  position: absolute;
-  inset: 0;
-  background: var(--tile-border);
-  border-radius: 10px; /* same corners as Play / Stop */
-}
-
-/* the clickable layer is see-through and covers the whole pill; it overrides the general .topbar button look */
-.topbar .share-goo button {
-  position: absolute;
-  inset: 0;
-  padding: 0;
-  min-height: 0;
-  background: transparent;
-  border: 0;
-  color: var(--text);
-  font-weight: 600;
+  justify-content: center;
   overflow: hidden;
+  perspective: 120px; /* gives the flip a little depth */
 }
-.topbar .share-goo button:hover { filter: none; color: var(--accent); }
-/* label and checkmark stacked in the middle of the pill, so they can swap at the same time */
-.share-goo__glyph {
+
+/* label and checkmark stacked in the middle, so they can swap at the same time */
+.share-btn__face {
   position: absolute;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   white-space: nowrap;
+  backface-visibility: hidden;
 }

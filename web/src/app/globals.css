@@ -6,13 +6,13 @@
 
 /* shadcn/Tailwind colour names mapped onto our own palette below, so components match the app.
    Mapped here instead of redefining --accent/--muted in :root, because ours mean different things
-   (--accent is our blue, --muted is a text colour; in shadcn both are background colours). */
+   (--accent is our selection red, --muted is a text colour; in shadcn both are background colours). */
 @theme inline {
   --color-background: var(--bg);
   --color-foreground: var(--text);
   --color-card: var(--tile);
   --color-card-foreground: var(--text);
-  --color-popover: var(--panel);
+  --color-popover: var(--tile);
   --color-popover-foreground: var(--text);
   --color-primary: var(--accent);
   --color-primary-foreground: var(--accent-ink);
@@ -23,55 +23,69 @@
   --color-accent: var(--tile-raised);
   --color-accent-foreground: var(--text);
   --color-destructive: var(--error);
-  --color-border: var(--tile-border);
+  --color-border: var(--ink);
   --color-input: var(--tile-border);
   --color-ring: var(--accent);
   --color-instrument: var(--instrument);
   --color-filter: var(--filter);
   --color-notes: var(--notes);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* drafting is square: every shadcn rounded-* is 0 */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
 }
 
 :root {
-  --radius: 0.5rem;
+  --radius: 0px;
 
-  /* "Warm Analog" theme (design/music-theme-directions.md): vintage studio, warm charcoal, felt, cloth cables.
-     Only colours live here; textures, faceplates, jacks and cable finishes are in theme.css. */
+  /* "Schematic Dark" theme (vault: Design/Design Mockups 2026-11-11.md): a signal-flow drawing at night.
+     Slate graph paper, chalk-white ink, ONE warm red (Output and selection). Node types aren't colour-coded;
+     part numbers (N1, I1, F1 ...) tell them apart. Finishes (handles, cables, selection) are in theme.css. */
 
-  /* surfaces */
-  --bg: #1b1714;          /* page background, warm charcoal */
-  --canvas-bg: radial-gradient(ellipse at 50% 0%, #2c231d 0%, #1b1714 70%); /* canvas: soft warm light from the top */
-  --panel: #221d19;       /* top bar, sidebar, EQ bar */
-  --tile: #2b2520;        /* nodes and palette chips */
-  --tile-raised: #362f28; /* buttons / inputs sitting on a tile */
-  --tile-border: #4d4239; /* tile outline */
-  --line: #2f2823;        /* dividers and panel borders */
+  /* the drawing's own names */
+  --paper: #141a22;   /* the sheet the drawing is on */
+  --sheet: #1a222d;   /* a part's body (a node), a shade lighter than the paper */
+  --ink: #d9e0ea;     /* chalk-white linework and text */
+  --soft: #8b97a8;    /* secondary ink: labels, units, hints */
+  --faint: #263243;   /* major grid lines (every 40px) */
+  --fainter: #1b2430; /* minor grid lines (every 8px) */
+  --red: #ff6f4f;     /* the only colour: Output, selection, the play lamp */
+
+  /* surfaces (the names the components use) */
+  --bg: var(--paper);
+  --canvas-bg: var(--paper);
+  --panel: var(--paper);
+  --tile: var(--sheet);
+  --tile-raised: #232d3b;   /* hover / pressed areas on a part */
+  --tile-border: #3d4a5c;   /* quiet lines inside a part (rests, dashed hints) */
+  --line: #2c3848;          /* hairline dividers */
 
   /* text */
-  --text: #f3eadb;          /* cream */
-  --muted: #c4b7a4;         /* labels, inactive tabs (readable on bg, panel and tile) */
-  --muted-on-tile: #c4b7a4; /* kept so notes-node.css works unchanged */
+  --text: var(--ink);
+  --muted: var(--soft);
+  --muted-on-tile: var(--soft);
 
-  /* node colours (each node type shows its own: faceplate strip, border tint, jack, cable) */
-  --notes: #7cc6a4;        /* sage */
-  --instrument: #e8a33d;   /* mustard */
-  --filter: #e2583e;       /* tomato */
-  --output: #6aa6d6;       /* denim */
-  --notes-tint: rgba(124, 198, 164, 0.14);
-  --notes-chip: rgba(124, 198, 164, 0.10);
-  --notes-chip-border: rgba(124, 198, 164, 0.40);
+  /* node colours: all ink, except the Output, which is the drawing's red */
+  --notes: var(--ink);
+  --instrument: var(--ink);
+  --filter: var(--ink);
+  --output: var(--red);
+  --notes-tint: rgba(217, 224, 234, 0.08);
+  --notes-chip: rgba(217, 224, 234, 0.04);
+  --notes-chip-border: rgba(217, 224, 234, 0.38);
 
   /* accents */
-  --accent: #e8a33d;       /* buttons, active tab (same mustard as Instrument) */
-  --accent-ink: #1b1714;   /* text on accent buttons */
-  --error: #ffb4ab;
+  --accent: var(--red);     /* selection, focus */
+  --accent-ink: var(--paper);
+  --error: #ff9b85;         /* a lighter red, so an error never reads as "selected" */
 
-  /* type (load Geist + Geist Mono via next/font or Google Fonts) */
-  --font-sans: "Geist", system-ui, sans-serif;
-  --font-mono: "Geist Mono", ui-monospace, monospace;
+  /* type (loaded in layout.tsx with next/font; the fallbacks are close system faces) */
+  --font-sans: var(--font-label), Bahnschrift, "DIN Alternate", "Arial Narrow", sans-serif;
+  --font-mono: var(--font-code), Consolas, "Courier New", monospace;
+
+  /* line weights */
+  --stroke: 1.5px;
 }
 
 * { box-sizing: border-box; }
@@ -91,81 +105,132 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
 /* APP GRID */
 .app {
   display: grid;
-  grid-template-columns: 1fr 240px;      /* canvas | sidebar */
-  grid-template-rows: 52px 1fr 72px;     /* top bar | main | EQ bar */
+  grid-template-columns: 1fr 220px;      /* canvas | sidebar */
+  grid-template-rows: 52px 1fr 34px;     /* top bar | main | credits */
   height: 100vh;
 }
 
-/* TOP BAR AND BUTTONS */
+/* TOP BAR */
 .topbar {
   grid-column: 1 / 2;
   grid-row: 1 / 2;
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   padding: 0 16px;
   background: var(--panel);
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--stroke) solid var(--ink);
 }
 
+/* the drawing's name, boxed like a stamp, at the top of the sidebar */
+.side .brand {
+  display: inline-block;
+  margin-bottom: 18px;
+  padding: 3px 8px;
+  border: var(--stroke) solid var(--ink);
+  font: 600 15px var(--font-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.topbar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+/* fields are a value written on a line, not a box */
 .topbar input {
-  width: 64px;
-  background: var(--tile);
+  width: 52px;
+  padding: 2px 2px;
+  background: transparent;
   color: var(--text);
-  border: 1px solid var(--tile-border);
-  border-radius: 8px;
-  padding: 4px 8px;
-  font-family: var(--font-mono);
-}
-.topbar input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent);
-}
-
-.topbar button {
-  background: var(--accent);
-  color: var(--accent-ink);
   border: 0;
-  border-radius: 8px;
-  padding: 6px 14px;
-  min-height: 32px;
-  cursor: pointer;
-  font-weight: 600;
+  border-bottom: var(--stroke) solid var(--ink);
+  border-radius: 0;
+  font: 14px var(--font-mono);
 }
-.topbar button:hover { filter: brightness(1.08); }
+.topbar input:focus { outline: none; border-bottom-color: var(--accent); }
 
-/* SIDEBAR (collaborators + palette) */
+/* BUTTONS: square, inked outline, a hard offset shadow; pressing pushes the key down onto it */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: var(--stroke) solid var(--ink);
+  border-radius: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font: 500 12px var(--font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  cursor: pointer;
+  box-shadow: 2px 2px 0 var(--tile-border);
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out, background-color 120ms;
+}
+.btn:hover { background: var(--tile-raised); }
+.btn:active { transform: translate(2px, 2px); box-shadow: 0 0 0 var(--tile-border); }
+.btn:focus-visible { outline: var(--stroke) solid var(--accent); outline-offset: 2px; }
+
+/* Play: solid ink with a red lamp; the lamp glows and pulses while the song plays */
+.btn--play { background: var(--ink); color: var(--paper); }
+.btn--play:hover { background: #ffffff; }
+.btn__lamp {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--red) 45%, var(--paper));
+}
+.btn--play.is-on .btn__lamp {
+  background: var(--red);
+  box-shadow: 0 0 6px var(--red);
+  animation: lamp 1s ease-in-out infinite;
+}
+@keyframes lamp { 50% { opacity: 0.35; box-shadow: none; } }
+
+/* SIDEBAR (collaborators + parts list) */
 .side {
   grid-column: 2 / 3;
   grid-row: 1 / 4;
-  border-left: 1px solid var(--line);
+  border-left: var(--stroke) solid var(--ink);
   background: var(--panel);
-  padding: 16px;
+  padding: 14px;
   overflow: auto; /* long palette scrolls inside the sidebar */
 }
 .side h4 {
   margin: 16px 0 8px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid var(--ink);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.14em;
-  color: var(--muted);
+  color: var(--text);
   text-transform: uppercase;
 }
+.side h4:first-child { margin-top: 0; }
 .side .chip {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 44px;
+  min-height: 38px;
   background: var(--tile);
-  border: 1px solid var(--tile-border);
-  border-radius: 10px;
-  padding: 8px 12px;
-  margin-bottom: 8px;
+  border: var(--stroke) solid var(--ink);
+  border-radius: 0;
+  padding: 6px 10px;
+  margin-bottom: 6px;
   font-size: 14px;
   cursor: grab;
+  transition: transform 80ms ease-out, box-shadow 80ms ease-out;
 }
-.side .chip:hover { border-color: color-mix(in srgb, var(--nc, var(--text)) 55%, var(--tile-border)); }
+/* picking a part up off the list: it lifts toward the cursor with a hard shadow */
+.side .chip:hover { transform: translate(-2px, -2px); box-shadow: 2px 2px 0 var(--tile-border); }
 .side .chip:active { cursor: grabbing; }
 
 /* TABS, CANVAS AND STRUDEL CODE */
@@ -176,25 +241,34 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   flex-direction: column;
   min-height: 0;
 }
+/* folder tabs sitting on the canvas's top line */
 .tabs {
   display: flex;
   gap: 4px;
   padding: 6px 12px 0;
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--stroke) solid var(--ink);
 }
 .tabs button {
   background: transparent;
   color: var(--muted);
-  border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px; /* sit the active underline on the tab bar's border */
-  padding: 8px 12px;
+  border: var(--stroke) solid transparent;
+  border-bottom: 0;
+  margin-bottom: calc(-1 * var(--stroke)); /* the active tab covers the line under it */
+  padding: 5px 12px;
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
 }
 .tabs button:hover { color: var(--text); }
-.tabs button.on { color: var(--text); border-bottom-color: var(--accent); }
+.tabs button.on {
+  color: var(--text);
+  background: var(--tile);
+  border-color: var(--ink);
+  box-shadow: 0 var(--stroke) 0 var(--tile); /* hides the canvas line under the open tab */
+}
 
-.canvas { flex: 1; min-height: 0; background: var(--canvas-bg); }
+.canvas { position: relative; flex: 1; min-height: 0; background: var(--canvas-bg); }
 
 .code {
   margin: 0;
@@ -203,7 +277,7 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   font-size: 13px;
   line-height: 1.6;
   color: var(--text);
-  background: var(--bg);
+  background: var(--tile);
   overflow: auto;
   flex: 1;
 }
@@ -212,59 +286,87 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
 .credits {
   grid-column: 1 / 2;
   grid-row: 3 / 4;
-  border-top: 1px solid var(--line);
+  border-top: var(--stroke) solid var(--ink);
   background: var(--panel);
   display: flex;
   align-items: center;
   gap: 24px;
   padding: 0 16px;
   color: var(--muted);
-  font-size: 13px;
+  font: 11.5px var(--font-mono);
 }
 .credits a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
 .credits a:hover { color: var(--accent); }
 
-.who { font-size: 13px; }
-.err { color: var(--error); font-size: 12px; }
+/* a filled square in each person's colour, like a key on a drawing */
+.who { font: 12px var(--font-mono); }
+.who::before { content: "■ "; color: var(--ink); }
+.err { color: var(--error); font: 12px var(--font-mono); }
+
+/* TITLE BLOCK: bottom-right corner of the drawing (display only, clicks go through to the canvas) */
+.titleblock {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 5;
+  display: grid;
+  grid-template-columns: auto auto;
+  border: var(--stroke) solid var(--ink);
+  background: var(--paper);
+  font: 11px var(--font-mono);
+  pointer-events: none;
+}
+.titleblock span { padding: 3px 8px; border: 0.5px solid var(--ink); white-space: nowrap; }
+.titleblock span:nth-child(odd) {
+  font: 500 10px var(--font-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
 
 /* REACT FLOW THEME
    Must match React Flow's own selector (.react-flow.dark, set by colorMode="dark") or its dark theme wins. */
 .react-flow.dark {
-  --xy-background-color-default: transparent; /* the warm --canvas-bg glow on .canvas shows through */
-  --xy-background-pattern-dots-color-default: var(--tile-border);
+  --xy-background-color-default: transparent; /* the paper on .canvas shows through */
 
   --xy-node-color-default: var(--text);
   --xy-node-background-color-default: var(--tile);
-  --xy-node-border-default: 1px solid var(--tile-border);
-  --xy-node-boxshadow-selected-default: 0 0 0 2px var(--accent);
+  --xy-node-border-default: var(--stroke) solid var(--ink);
+  --xy-node-boxshadow-selected-default: none;
 
-  --xy-edge-stroke-default: var(--tile-border); /* only for edges that aren't cables, e.g. the line while connecting */
-  --xy-edge-stroke-width-default: 2;
+  --xy-edge-stroke-default: var(--ink); /* only for edges that aren't cables, e.g. the line while connecting */
+  --xy-edge-stroke-width-default: 1.6;
   --xy-edge-stroke-selected-default: var(--accent);
   --xy-connectionline-stroke-default: var(--accent);
+  --xy-connectionline-stroke-width-default: 1.6;
 
-  --xy-handle-background-color-default: var(--accent);
-  --xy-handle-border-color-default: var(--bg);
+  --xy-handle-background-color-default: var(--paper);
+  --xy-handle-border-color-default: var(--ink);
 
-  --xy-controls-button-background-color-default: var(--tile);
+  --xy-controls-button-background-color-default: var(--paper);
   --xy-controls-button-background-color-hover-default: var(--tile-raised);
   --xy-controls-button-color-default: var(--text);
   --xy-controls-button-color-hover-default: var(--text);
-  --xy-controls-button-border-color-default: var(--tile-border);
+  --xy-controls-button-border-color-default: var(--ink);
+  --xy-controls-box-shadow-default: none;
 
   --xy-minimap-background-color-default: var(--panel);
-  --xy-selection-background-color-default: color-mix(in srgb, var(--accent) 8%, transparent);
+  --xy-selection-background-color-default: color-mix(in srgb, var(--accent) 6%, transparent);
   --xy-selection-border-default: 1px dashed var(--accent);
 }
+.react-flow__controls { border: var(--stroke) solid var(--ink); }
+.react-flow__controls-button { border-bottom-width: var(--stroke); }
+.react-flow__controls-button:last-child { border-bottom: 0; }
 
 /* BPM box shows red while the typed value is out of range */
-.topbar input[aria-invalid="true"] { border-color: var(--error); }
+.topbar input[aria-invalid="true"] { border-bottom-color: var(--error); color: var(--error); }
 
-/* nodes with no path to Output (unplugged) */
-.react-flow__node.is-silent{
-  opacity: 0.5;
+/* nodes with no path to Output (unplugged): drawn faded, with a dashed outline like a part not yet fitted */
+.react-flow__node.is-silent {
+  opacity: 0.45;
   transition: opacity 150ms ease;
 }
+
 /* tempo readout next to the BPM box: what the BPM means in bars (hover for the explanation) */
 .topbar .tempo-info {
   font-family: var(--font-mono);
@@ -274,16 +376,9 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   cursor: help;
 }
 
-/* VOLUME SLIDER (top bar)
-   Native range inputs ignore most styling, so appearance is reset and the track/thumb drawn by hand.
-   --fill is set from page.tsx as the slider moves, so the played-through part of the track shows in the accent. */
-.topbar .vol {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  color: var(--muted);
-}
+/* VOLUME SLIDER (top bar): a thin inked track, filled up to a square thumb.
+   --fill is set from EditorApp as the slider moves. */
+.topbar .vol { font-size: 12px; }
 .topbar input[type="range"] {
   --fill: 50%;
   appearance: none;
@@ -291,34 +386,27 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   width: 96px;
   height: 6px;
   padding: 0;
-  border: 1px solid var(--tile-border);
-  border-radius: 999px;
-  background: linear-gradient(to right, var(--accent) var(--fill), var(--tile-raised) var(--fill));
+  border: 1px solid var(--ink);
+  border-radius: 0;
+  background: linear-gradient(to right, var(--ink) var(--fill), transparent var(--fill));
   cursor: pointer;
 }
-.topbar input[type="range"]:focus { box-shadow: none; }
-.topbar input[type="range"]:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 20%, transparent); }
-
-/* thumb: accent dot with a bg-coloured ring, same look as the node handles */
+.topbar input[type="range"]:focus-visible { outline: var(--stroke) solid var(--accent); outline-offset: 3px; }
 .topbar input[type="range"]::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg);
-  box-shadow: 0 0 0 1px var(--tile-border);
+  width: 8px;
+  height: 16px;
+  border-radius: 0;
+  background: var(--paper);
+  border: var(--stroke) solid var(--ink);
 }
 .topbar input[type="range"]::-moz-range-thumb {
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  border: 2px solid var(--bg);
-  box-shadow: 0 0 0 1px var(--tile-border);
+  width: 8px;
+  height: 16px;
+  border-radius: 0;
+  background: var(--paper);
+  border: var(--stroke) solid var(--ink);
 }
-.topbar input[type="range"]:hover::-webkit-slider-thumb { filter: brightness(1.08); }
-.topbar input[type="range"]:hover::-moz-range-thumb { filter: brightness(1.08); }
 
 /* ERRORS (top bar): takes the leftover width; each source is one line, cut with … (full text on hover) */
 .topbar .errors {
@@ -335,23 +423,26 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   text-overflow: ellipsis;
 }
 
-.topbar .room-status { font-size: 12px; opacity: 0.7; }
-.topbar .room-status[data-status="open"] { color: var(--ok, #4ade80); opacity: 1; }
-.topbar .room-status[data-status="closed"] { color: var(--error); opacity: 1; }
+/* room connection: quiet when connected, red when lost, blinking while it connects */
+.topbar .room-status { font: 11px var(--font-mono); color: var(--muted); white-space: nowrap; }
+.topbar .room-status::before { content: "● "; }
+.topbar .room-status[data-status="open"]::before { color: var(--ink); }
+.topbar .room-status[data-status="closed"] { color: var(--error); }
+.topbar .room-status[data-status="connecting"]::before { animation: lamp 0.8s steps(2) infinite; }
 
 /* DRAG TOOLTIP (canvas/sequence.ts): shown above the node being dragged */
 .drag-hint {
-  padding: 4px 10px;
-  border-radius: 6px;
-  border: 1px solid var(--tile-border);
-  background: var(--tile-raised);
+  padding: 3px 8px;
+  border: 1px solid var(--ink);
+  background: var(--paper);
   color: var(--muted);
-  font-size: 12px;
+  font: 11px var(--font-mono);
   white-space: nowrap;
   pointer-events: none;
 }
-.drag-hint.is-reorder {
-  border-color: var(--notes-chip-border);
-  background: var(--notes-tint);
-  color: var(--notes);
+.drag-hint.is-reorder { color: var(--text); border-color: var(--accent); }
+
+@media (prefers-reduced-motion: reduce) {
+  .btn--play.is-on .btn__lamp,
+  .topbar .room-status[data-status="connecting"]::before { animation: none; }
 }

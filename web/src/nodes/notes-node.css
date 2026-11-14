@@ -10,7 +10,7 @@
   width: 320px;
   background: var(--tile);
   border: 1px solid var(--tile-border);
-  border-radius: 14px;
+  border-radius: 0;
   color: var(--text);
   font-family: var(--font-sans);
 }
@@ -28,7 +28,7 @@
 .react-flow__node-notes:hover {
   padding: 0;
   border: none;
-  border-radius: 14px;
+  border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
@@ -48,7 +48,7 @@
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--notes-tint);
   color: var(--notes);
   flex-shrink: 0;
@@ -181,7 +181,7 @@
   height: 44px;
   box-sizing: border-box;
   overflow: hidden;
-  border-radius: 8px;
+  border-radius: 0;
   background: var(--notes-chip);
   border: 1px solid var(--notes-chip-border);
   font-family: var(--font-mono);
@@ -317,7 +317,7 @@
   height: 36px;
   box-sizing: border-box;
   padding: 0 12px;
-  border-radius: 8px;
+  border-radius: 0;
   border: 1px solid var(--line);
   background: var(--bg);
   color: var(--text);
@@ -349,21 +349,22 @@
 }
 
 
-/* ---------- Play-order badge (only on Notes inside a cat group) ---------- */
+/* ---------- Play-order badge (only on Notes inside a cat group) ----------
+   a numbered box hanging off the part's top-left corner, like a callout on a drawing */
 .notes-node__seq {
   position: absolute;
-  top: -9px;
-  left: -9px;
+  top: -1.5px;
+  left: -26px;
   z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 20px;
   height: 20px;
-  padding: 0 5px;
-  border-radius: 10px;
-  background: var(--notes);
-  color: var(--bg);
+  padding: 0 4px;
+  border-radius: 0;
+  background: var(--paper);
+  border: var(--stroke) solid var(--ink);
+  color: var(--text);
   font: 600 11px var(--font-mono);
-  box-shadow: 0 0 0 3px var(--bg);
 }

@@ -1,5 +1,5 @@
 import type { Edge, Node } from "@xyflow/react";
-import type { Doc, NodeType, Position } from "@/model/types";
+import type { Doc, Position } from "@/model/types";
 import type { CatGroup } from "./sequence";
 
 /**
@@ -58,29 +58,21 @@ export function toFlowNodes(doc: Doc, ui: UiState, live: ReadonlySet<string>, gr
   })];
 }
 
-/** the colour each node type puts on its cables (theme tokens from globals.css) */
-export const CABLE_COLOR: Record<NodeType, string> = {
-  notes: "var(--notes)",
-  instrument: "var(--instrument)",
-  filter: "var(--filter)",
-  fx: "var(--filter)",
-  output: "var(--output)",
-};
-
 /**
  * Doc + UI state --> React Flow edges (edge ids are already deterministic: "source->target").
- * Drawn as patch cables (CableEdge) that fade from the source node's colour to the target's.
+ * Drawn as schematic wires (CableEdge). bus = the target has 2+ inputs, so its wires merge into one line going in.
  */
 export function toFlowEdges(doc: Doc, ui: UiState): Edge[] {
-  return Object.values(doc.edges).map((e) => ({
+  const edges = Object.values(doc.edges);
+  const inputs: Record<string, number> = {};
+  for (const e of edges) inputs[e.target] = (inputs[e.target] ?? 0) + 1;
+
+  return edges.map((e) => ({
     id: e.id,
     source: e.source,
     target: e.target,
     selected: ui.selected.has(e.id),
     type: "cable",
-    data: {
-      from: CABLE_COLOR[doc.nodes[e.source]?.type ?? "output"],
-      to: CABLE_COLOR[doc.nodes[e.target]?.type ?? "output"],
-    },
+    data: { bus: inputs[e.target] > 1 },
   }));
 }
