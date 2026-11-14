@@ -1,6 +1,6 @@
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, TypeAdapter
 
 # Mirrors protocol.ts in web only the envelope needs validation
 # the op inside stays a plain dict
@@ -18,6 +18,30 @@ class ClientOpMessage(BaseModel):
     clientSeq: int
 
 
+class ClaimMessage(BaseModel):
+    """client -> server: I started dragging these nodes"""
+
+    type: Literal["claim"]
+    nodeIds: list[str]
+
+
+class ReleaseMessage(BaseModel):
+    """client -> server: I dropped these nodes"""
+
+    type: Literal["release"]
+    nodeIds: list[str]
+
+
+# every message a client can send --> pydantic picks the class from the type field
+# a "type" doesnt know or a missing field raises ValidationError like before
+
+ClientMessage = TypeAdapter(
+    Annotated[
+        ClientOpMessage | ClaimMessage | ReleaseMessage, Field(discriminator="type")
+    ]
+)
+
+
 class SnapshotMessage(BaseModel):
     """server -> client, once on connect: the rooms whole op log"""
 
@@ -25,6 +49,9 @@ class SnapshotMessage(BaseModel):
     version: int
     clientId: str
     ops: list[Op]
+    claims: dict[
+        str, str
+    ] = {}  # nodeId -> clientId of whoever is dragging it right now
 
 
 class ServerOpMessage(BaseModel):
@@ -43,3 +70,10 @@ class RejectMessage(BaseModel):
     type: Literal["reject"] = "reject"
     clientSeq: int
     reason: str
+
+
+class ClaimsMessage(BaseModel):
+    """server -> everyone in the room: who is dragging what (the entire map every time it changes)"""
+
+    type: Literal["claims"] = "claims"
+    claims: dict[str, str]  # nodeId -> clientId

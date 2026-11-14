@@ -40,12 +40,49 @@ class Room:
         self.doc: dict = STARTER_DOC
         # maps each connected socket to its client id, how the room will know who to broadcast to and the sender id is how the echo gets tagged
         self.clients: dict[WebSocket, str] = {}
+        # nodeId -> clientId of whoever is dragging it --> the live state only never stored in ops
+        self.claims: dict[str, str] = {}
 
     @property
     def version(self) -> int:
         return len(self.ops)
 
-    def try_append(self, op: dict[str, Any]) -> int | Rejected:
+    # three claim methods
+    def claim(self, client_id: str, node_ids: list[str]) -> bool:
+        """take every node that is free -> returns TRUE if the map changed"""
+        changed = False
+        for nid in node_ids:
+            if nid not in self.claims:
+                self.claims[nid] = client_id
+                changed = True
+        return changed
+
+    def release(self, client_id: str, node_ids: list[str]) -> bool:
+        """let go of the given nodes but only the ones this client holds"""
+        mine = [nid for nid in node_ids if self.claims.get(nid) == client_id]
+        for nid in mine:
+            del self.claims[nid]
+        return bool(mine)
+
+    def release_all(self, client_id: str) -> bool:
+        """on disconnect: drop everything this client holds"""
+        return self.release(client_id, list(self.claims))
+
+    # move check
+    def held_by_other(self, op: dict[str, Any], client_id: str | None) -> bool:
+        """a moveNodes that touches a node someone else is dragging"""
+        if op.get("type") != "moveNodes":
+            return False
+        positions = op.get("positions")
+        if not isinstance(positions, dict):
+            return False  # malformed --> let apply_op reject it with its usual reason
+        return any(self.claims.get(nid, client_id) != client_id for nid in positions)
+
+    def try_append(
+        self, op: dict[str, Any], client_id: str | None = None
+    ) -> int | Rejected:
+        if self.held_by_other(op, client_id):
+            return Rejected("node is being moved by someone else")
         result = apply_op(self.doc, op)
         if isinstance(result, Rejected):
             return result
