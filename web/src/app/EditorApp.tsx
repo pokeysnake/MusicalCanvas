@@ -10,7 +10,7 @@ import {
 import { nodesReachingOutput } from "@/model/graph";
 import { applyOp } from "@/model/applyOp";
 import { initialSync, syncReducer } from "@/sync/optimistic";
-import { emptyUi, GROUP_PREFIX, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
+import { emptyUi, GROUP_PREFIX, heldByOthers, toFlowEdges, toFlowNodes, type UiState } from "@/canvas/flow";
 import { DispatchProvider } from "@/canvas/dispatch";
 import { partRefs, PartRefsProvider } from "@/canvas/partRefs";
 import { bpmOp, deleteOp, moveOp } from "@/canvas/ops";
@@ -75,13 +75,15 @@ const BPM_MAX = 240;
    ===================================================================== */
 function Editor({ roomId }: { roomId: string | null }) {
     /* ---------- State ---------- */
-    const [{ doc, error: opError, version }, act] = useReducer(syncReducer, initialDoc, initialSync);
+    const [{ doc, error: opError, version, clientId, bounced }, act] = useReducer(syncReducer, initialDoc, initialSync);
 
     /* Optimistic (Stage 6): every op shows up on screen at once.
        Room: send it first to learn its clientSeq, then apply it as pending; the echo confirms it,
        a reject rolls it back (see sync/optimistic.ts). If the socket isn't open the op is dropped.
        Solo (roomId null): it goes straight into the doc. Either way the rest of the app just calls dispatch(op). */
-    const { status, send } = useRoomSocket(roomId, act);
+    const { status, send, claims, claim, release } = useRoomSocket(roomId, act);
+    // nodes someone else is dragging right now (nodeId -> their colour); they can't be grabbed until dropped
+    const held = useMemo(() => heldByOthers(claims, clientId), [claims, clientId]);
     const dispatch = useCallback((op: Op) => {
         if (!roomId) return act({ type: "local", op, seq: null });
         const seq = send(op);
@@ -101,7 +103,7 @@ function Editor({ roomId }: { roomId: string | null }) {
     const issueLine = issues.map((i) => issueText(doc, i)).join(" · ");
     // cat sequences to frame; uses live drag positions so the frame stretches and renumbers mid-drag
     const groups = useMemo(() => catGroups(doc, ui.drag, (id) => ui.dims[id]), [doc, ui.drag, ui.dims]);
-    const nodes = useMemo(() => toFlowNodes(doc, ui, live, groups), [doc, ui, live, groups]);
+    const nodes = useMemo(() => toFlowNodes(doc, ui, live, groups, held), [doc, ui, live, groups, held]);
     const edges = useMemo(() => toFlowEdges(doc, ui), [doc, ui]);
     // part numbers (N1, I1 ...) only change when parts are added or removed, so the context value is keyed on
     // their JSON: an ordinary edit or move keeps the same object and doesn't re-render every node
@@ -117,6 +119,16 @@ function Editor({ roomId }: { roomId: string | null }) {
         () => (leadId && ui.drag[leadId] ? dragHint(doc, leadId, ui.drag) : null),
         [doc, leadId, ui.drag],
     );
+
+    // snap-back tag: my drop lost the race for a node someone else grabbed first, so it jumped back.
+    // Shown until a timer marks that bounce (by its count) as seen; a new bounce has a new count and shows again.
+    const [seenBounce, setSeenBounce] = useState(0);
+    useEffect(() => {
+        if (!bounced) return;
+        const t = setTimeout(() => setSeenBounce(bounced.n), 1600);
+        return () => clearTimeout(t);
+    }, [bounced]);
+    const bounceIds = bounced && bounced.n !== seenBounce ? bounced.ids.filter((id) => id in doc.nodes) : [];
 
     // which Notes node has the popup open; look it up in the doc each render so a deleted node closes it
     // (also remembers where the node was on screen, so the popup can grow out of it)
@@ -189,17 +201,21 @@ function Editor({ roomId }: { roomId: string | null }) {
     // the same handler (React batches both, so no snap-back; if the op is rejected, clearing the
     // overlay snaps the nodes back to their Doc positions).
     // Notes in a cat sequence snap into a tidy column in their new play order; the snap rides in the same op.
-    const onNodeDragStart = useCallback((_: unknown, node: Node) => {
+    // Drag claims (rooms only): claim the nodes on drag start so nobody else can grab them, release them on
+    // drop right after the move op. If someone claimed first, my drop is rejected and snaps back (bounced).
+    const onNodeDragStart = useCallback((_: unknown, node: Node, dragged: Node[]) => {
         if (node.id.startsWith(GROUP_PREFIX)) {
             const g = groups.find((x) => GROUP_PREFIX + x.instrumentId === node.id);
             if (g) {
                 const members = Object.fromEntries(g.order.map((id) => [id, doc.nodes[id].position]));
                 frameDrag.current = { id: node.id, start: node.position, members };
+                claim(g.order); // the frame isn't a Doc node; its Notes are what move
             }
             return; // no drag tooltip for the frame
         }
+        claim(dragged.map((n) => n.id));
         setLeadId(node.id);
-    }, [groups, doc]);
+    }, [groups, doc, claim]);
 
     const onNodeDragStop = useCallback((_: unknown, node: Node, dragged: Node[]) => {
         const fd = frameDrag.current;
@@ -208,6 +224,7 @@ function Editor({ roomId }: { roomId: string | null }) {
             const dx = node.position.x - fd.start.x, dy = node.position.y - fd.start.y;
             const moved = Object.entries(fd.members).map(([id, p]) => ({ id, position: { x: p.x + dx, y: p.y + dy } }));
             if (dx !== 0 || dy !== 0) dispatch(moveOp(moved));
+            release(Object.keys(fd.members));
             setUi((prev) => {
                 const drag = { ...prev.drag };
                 for (const id of [fd.id, ...Object.keys(fd.members)]) delete drag[id];
@@ -219,13 +236,14 @@ function Editor({ roomId }: { roomId: string | null }) {
         const dropped = Object.fromEntries(dragged.map((n) => [n.id, n.position]));
         const snap = snapPositions(doc, dropped, (id) => getNode(id)?.measured?.height);
         dispatch(moveOp(dragged, snap));
+        release(dragged.map((n) => n.id)); // after the move, so the server applies the move while I still hold them
         setLeadId(null);
         setUi((prev) => {
             const drag = { ...prev.drag };
             for (const n of dragged) delete drag[n.id];
             return { ...prev, drag };
         });
-    }, [dispatch, doc, getNode]);
+    }, [dispatch, doc, getNode, release]);
 
     /* ---------- Connections ---------- */
     const onConnect = useCallback((c: Connection) => {
@@ -415,6 +433,12 @@ function Editor({ roomId }: { roomId: string | null }) {
                                 <NodeToolbar nodeId={leadId} isVisible
                                     className={hint.reorder ? "drag-hint is-reorder" : "drag-hint"}>
                                     {hint.text}
+                                </NodeToolbar>
+                            )}
+                            {/* snap-back tag: why the node(s) I just dropped jumped back */}
+                            {bounceIds.length > 0 && (
+                                <NodeToolbar nodeId={bounceIds} isVisible className="drag-hint is-bounced">
+                                    someone else grabbed it first
                                 </NodeToolbar>
                             )}
                         </ReactFlow>

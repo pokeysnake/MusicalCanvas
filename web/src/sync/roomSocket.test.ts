@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Doc, Op } from "@/model/types";
 import { starterDoc, starterOps } from "@/model/starter";
-import type { RejectMessage, ServerOpMessage } from "./protocol";
+import type { Claims, RejectMessage, ServerOpMessage } from "./protocol";
 import { connectRoom, type SocketLike, type Status } from "./roomSocket";
 
 class FakeSocket implements SocketLike {
@@ -37,6 +37,7 @@ let ops: ServerOpMessage[];
 let rejects: RejectMessage[];
 let ids: string[];
 let statuses: Status[];
+let claimMaps: Claims[];
 const connect = () =>
   connectRoom(
     "ws://x/ws/r1",
@@ -48,6 +49,7 @@ const connect = () =>
       onOp: (m) => ops.push(m),
       onReject: (m) => rejects.push(m),
       onStatus: (s) => statuses.push(s),
+      onClaims: (c) => claimMaps.push(c),
     },
     FakeSocket,
   );
@@ -58,6 +60,7 @@ beforeEach(() => {
   rejects = [];
   ids = [];
   statuses = [];
+  claimMaps = [];
 });
 
 describe("connectRoom", () => {
@@ -141,5 +144,63 @@ describe("connectRoom", () => {
     expect(ws.closed).toBe(true);
     expect(ws.onmessage).toBeNull();
     expect(ws.onclose).toBeNull();
+  });
+});
+describe("connectRoom: drag claims", () => {
+  const sent = () => FakeSocket.last.sent.map((s) => JSON.parse(s));
+
+  it("a snapshot hands over the room's claims (none = empty map)", () => {
+    connect();
+    FakeSocket.last.receive({ type: "snapshot", version: 0, clientId: "c1", ops: [], claims: { n1: "c2" } });
+    FakeSocket.last.receive({ type: "snapshot", version: 0, clientId: "c1", ops: [] });
+    expect(claimMaps).toEqual([{ n1: "c2" }, {}]);
+  });
+
+  it("a claims message goes to onClaims, not onOp", () => {
+    connect();
+    FakeSocket.last.receive({ type: "claims", claims: { n1: "c2" } });
+    expect(claimMaps).toEqual([{ n1: "c2" }]);
+    expect(ops).toEqual([]);
+  });
+
+  it("claim and release send their node ids", () => {
+    const room = connect();
+    FakeSocket.last.open();
+    room.claim(["n1", "n2"]);
+    room.release(["n1", "n2"]);
+    expect(sent()).toEqual([
+      { type: "claim", nodeIds: ["n1", "n2"] },
+      { type: "release", nodeIds: ["n1", "n2"] },
+    ]);
+  });
+
+  it("sends nothing for an empty list, or while the socket isn't open", () => {
+    const room = connect();
+    room.claim(["n1"]);
+    FakeSocket.last.open();
+    room.claim([]);
+    room.release([]);
+    expect(FakeSocket.last.sent).toEqual([]);
+  });
+
+  it("claims don't use up an op clientSeq", () => {
+    const room = connect();
+    FakeSocket.last.open();
+    room.claim(["n1"]);
+    expect(room.send(bpm(100))).toBe(1);
+  });
+
+  it("with lag, claim, move and release still leave in the order they were sent", () => {
+    vi.useFakeTimers();
+    const handlers = { onSnapshot() {}, onOp() {}, onReject() {}, onStatus() {} };
+    const room = connectRoom("ws://x/ws/r1", handlers, FakeSocket, 3000);
+    FakeSocket.last.open();
+    room.claim(["n1"]);
+    room.send(bpm(100));
+    room.release(["n1"]);
+    expect(FakeSocket.last.sent).toEqual([]);
+    vi.advanceTimersByTime(3000);
+    expect(sent().map((m) => m.type)).toEqual(["claim", "op", "release"]);
+    vi.useRealTimers();
   });
 });

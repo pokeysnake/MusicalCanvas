@@ -446,3 +446,27 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
   .btn--play.is-on .btn__lamp,
   .topbar .room-status[data-status="connecting"]::before { animation: none; }
 }
+
+/* ---------- Drag claims ----------
+   A node someone else is dragging: dashed outline and a "moving" tag in their colour (--claim, set per node
+   in canvas/flow.ts), and it can't be grabbed until they drop it. */
+.react-flow__node.is-claimed {
+  outline: 1.5px dashed var(--claim);
+  outline-offset: 5px;
+  cursor: not-allowed;
+}
+.react-flow__node.is-claimed::after {
+  content: "moving";
+  position: absolute;
+  top: -22px;
+  left: -5px;
+  padding: 0 5px;
+  background: var(--claim);
+  color: var(--paper);
+  font: 600 10px/15px var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+/* my drop lost the race: same tooltip as the drag hint, in the alert colour */
+.drag-hint.is-bounced { color: var(--text); border-color: var(--accent); }

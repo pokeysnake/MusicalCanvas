@@ -42,6 +42,27 @@ describe("parseServerMessage", () => {
     expect(parseServerMessage(JSON.stringify({ type: "reject", clientSeq: 2 }))).toBeNull();
   });
 
+  it("accepts a snapshot with claims, and one without (claims is optional)", () => {
+    const withClaims = { ...snapshot, claims: { n1: "c2" } };
+    expect(parseServerMessage(JSON.stringify(withClaims))).toEqual(withClaims);
+  });
+
+  it("returns null for a snapshot whose claims isn't a map of strings", () => {
+    expect(parseServerMessage(JSON.stringify({ ...snapshot, claims: ["n1"] }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ ...snapshot, claims: { n1: 5 } }))).toBeNull();
+  });
+
+  it("accepts a claims message, including the empty map (everything released)", () => {
+    for (const claims of [{ n1: "c1", n2: "c2" }, {}]) {
+      expect(parseServerMessage(JSON.stringify({ type: "claims", claims }))).toEqual({ type: "claims", claims });
+    }
+  });
+
+  it("returns null for a claims message without a map", () => {
+    expect(parseServerMessage(JSON.stringify({ type: "claims" }))).toBeNull();
+    expect(parseServerMessage(JSON.stringify({ type: "claims", claims: null }))).toBeNull();
+  });
+
   it("returns null for text that isn't JSON", () => {
     expect(parseServerMessage("hello")).toBeNull();
   });

@@ -1,6 +1,6 @@
 import { applyOp } from "@/model/applyOp";
 import type { Doc, Op } from "@/model/types";
-import type { ServerOpMessage } from "./protocol";
+import { CLAIM_REJECT, type ServerOpMessage } from "./protocol";
 
 /* ---------- Optimistic edits (Stage 6) ----------
    confirmed = the doc built ONLY from ops the server accepted, in server order (every client agrees on it)
@@ -27,6 +27,9 @@ export type SyncState = {
   /** how many ops `confirmed` is built from (the server's op-log version in a room; counted locally in solo).
    *  Display only: shown as the drawing's revision in the title block. */
   version: number;
+  /** the nodes my last drop tried to move while someone else held them: they just snapped back, so the
+   *  editor tags them for a moment. n counts up per bounce, so the same nodes bouncing twice still re-shows the tag. */
+  bounced: { ids: string[]; n: number } | null;
 };
 
 export type SyncAction =
@@ -47,6 +50,7 @@ export const initialSync = (doc: Doc): SyncState => ({
   error: null,
   clientId: null,
   version: 0,
+  bounced: null,
 });
 
 /** confirmed + pending, skipping any pending op that no longer applies */
@@ -61,7 +65,7 @@ export function rebase(confirmed: Doc, pending: Pending[]): Doc {
 export function syncReducer(s: SyncState, a: SyncAction): SyncState {
   switch (a.type) {
     case "snapshot":
-      return { confirmed: a.doc, pending: [], doc: a.doc, error: null, clientId: a.clientId, version: a.version ?? 0 };
+      return { ...s, confirmed: a.doc, pending: [], doc: a.doc, error: null, clientId: a.clientId, version: a.version ?? 0 };
 
     case "local": {
       const r = applyOp(s.doc, a.op);
@@ -93,7 +97,11 @@ export function syncReducer(s: SyncState, a: SyncAction): SyncState {
 
     case "reject": {
       const pending = s.pending.filter((p) => p.seq !== a.clientSeq);
-      return { ...s, pending, doc: rebase(s.confirmed, pending), error: a.reason };
+      const next = { ...s, pending, doc: rebase(s.confirmed, pending), error: a.reason };
+      // a drop that lost the race for a node: remember which nodes snapped back
+      const lost = s.pending.find((p) => p.seq === a.clientSeq)?.op;
+      if (a.reason !== CLAIM_REJECT || lost?.type !== "moveNodes") return next;
+      return { ...next, bounced: { ids: Object.keys(lost.positions), n: (s.bounced?.n ?? 0) + 1 } };
     }
   }
 }

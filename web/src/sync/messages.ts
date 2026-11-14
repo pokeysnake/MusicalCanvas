@@ -24,10 +24,20 @@ export function parseServerMessage(text: string): ServerMessage | null {
   if (m.type === "reject" && typeof m.clientSeq === "number" && typeof m.reason === "string") {
     return data as ServerMessage;
   }
+  if (m.type === "claims" && isClaims(m.claims)) return data as ServerMessage;
   const hasIds = typeof m.version === "number" && typeof m.clientId === "string";
-  if (m.type === "snapshot" && hasIds && Array.isArray(m.ops)) return data as ServerMessage;
+  // claims is optional on a snapshot (an older server doesn't send it), but if present it must be a map
+  if (m.type === "snapshot" && hasIds && Array.isArray(m.ops) && (m.claims === undefined || isClaims(m.claims))) {
+    return data as ServerMessage;
+  }
   if (m.type === "op" && hasIds && typeof m.clientSeq === "number" && typeof m.op === "object" && m.op !== null) {
     return data as ServerMessage;
   }
   return null;
+}
+
+/** a plain object of string → string (nodeId → clientId) */
+function isClaims(v: unknown): boolean {
+  return typeof v === "object" && v !== null && !Array.isArray(v)
+    && Object.values(v).every((id) => typeof id === "string");
 }

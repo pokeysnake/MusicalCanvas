@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react";
 import type { Edge, Node } from "@xyflow/react";
 import type { Doc, Position } from "@/model/types";
 import type { CatGroup } from "./sequence";
@@ -17,14 +18,35 @@ export type UiState = {
 
 export const emptyUi = (): UiState => ({ drag: {}, selected: new Set(), dims: {} });
 
+/** colours for other people's drag claims; no red, that's the Output and the selection colour */
+export const CLAIM_COLORS = ["#f2b84b", "#4fc3d9", "#7bd88f", "#b392f0"];
+
+/** the same client always gets the same colour, on every screen (a small string hash, no shared state) */
+export function claimColor(clientId: string): string {
+  let h = 0;
+  for (const ch of clientId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return CLAIM_COLORS[h % CLAIM_COLORS.length];
+}
+
+/** the claims map minus my own claims, as nodeId -> colour of whoever holds it */
+export function heldByOthers(claims: Record<string, string>, me: string | null): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(claims).filter(([, who]) => who !== me).map(([id, who]) => [id, claimColor(who)]),
+  );
+}
+
 /** prefix for cat group frame ids, so they can never clash with Doc node ids */
 export const GROUP_PREFIX = "cat:";
 
 /**
  * Doc + UI state --> React Flow nodes. Nodes not in `live` (can't reach the Output) get "is-silent".
  * Cat group frames come first (drawn behind everything); a Notes inside a group gets `seq` = its play number.
+ * held = nodes someone ELSE is dragging (nodeId -> their colour): those can't be grabbed and get an "is-claimed"
+ * outline, and so can't the frames around them (a frame drag would move them too).
  */
-export function toFlowNodes(doc: Doc, ui: UiState, live: ReadonlySet<string>, groups: CatGroup[] = []): Node[] {
+export function toFlowNodes(
+  doc: Doc, ui: UiState, live: ReadonlySet<string>, groups: CatGroup[] = [], held: Record<string, string> = {},
+): Node[] {
   const seq: Record<string, number> = {};
   for (const g of groups) g.order.forEach((id, i) => { seq[id] ??= i + 1; });
 
@@ -35,7 +57,7 @@ export function toFlowNodes(doc: Doc, ui: UiState, live: ReadonlySet<string>, gr
     width: g.box.width,
     height: g.box.height,
     data: { label: g.label, members: g.members },
-    draggable: true,
+    draggable: !g.order.some((id) => id in held),
     dragHandle: ".cat-group__tab", // only the label tab grabs the group; the rest of the frame is click-through
     selectable: false,
     focusable: false,
@@ -46,14 +68,22 @@ export function toFlowNodes(doc: Doc, ui: UiState, live: ReadonlySet<string>, gr
 
   return [...frames, ...Object.values(doc.nodes).map((n) => {
     const size = ui.dims[n.id];
+    const silent = live.has(n.id) ? undefined : "is-silent";
+    const color = held[n.id];
     return {
       id: n.id,
       type: n.type,
       position: ui.drag[n.id] ?? n.position,
       data: (n.id in seq ? { ...n.data, seq: seq[n.id] } : n.data) as Record<string, unknown>,
       selected: ui.selected.has(n.id),
-      className: live.has(n.id) ? undefined : "is-silent",
+      className: silent,
       ...(size && { measured: size }),
+      // --claim colours the dashed outline and the "moving" tag (globals.css .is-claimed)
+      ...(color && {
+        className: silent ? `${silent} is-claimed` : "is-claimed",
+        draggable: false,
+        style: { "--claim": color } as CSSProperties,
+      }),
     };
   })];
 }

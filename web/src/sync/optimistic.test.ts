@@ -3,6 +3,7 @@ import { applyOp } from "@/model/applyOp";
 import { starterDoc } from "@/model/starter";
 import type { Doc, Op } from "@/model/types";
 import { initialSync, syncReducer, type SyncAction, type SyncState } from "./optimistic";
+import { CLAIM_REJECT } from "./protocol";
 
 /* starter: n1 (notes) -> n2 (instrument) -> n3 (lpf) -> output */
 const bpm = (n: number): Op => ({ type: "setSetting", opId: `bpm${n}`, patch: { bpm: n } });
@@ -141,5 +142,37 @@ describe("syncReducer: two clients converge", () => {
     expect(server.nodes.n3).toBeUndefined();        // b's delete beat a's edit
     expect(server.nodes.n1.position.x).toBe(20);    // b's move came last
     expect(server.settings.bpm).toBe(130);
+  });
+});
+
+describe("syncReducer: drag claim rejects (the snap-back tag)", () => {
+  const reject = (clientSeq: number, reason = CLAIM_REJECT): SyncAction => ({ type: "reject", clientSeq, reason });
+
+  it("my drop on a node someone else holds rolls back and records which nodes bounced", () => {
+    const s = run(joined(), local(move("n1", 50), 1), reject(1));
+    expect(s.doc.nodes.n1.position).toEqual(starterDoc().nodes.n1.position);
+    expect(s.bounced).toEqual({ ids: ["n1"], n: 1 });
+    expect(s.error).toBe(CLAIM_REJECT);
+  });
+
+  it("each bounce counts up, so the same node bouncing twice shows the tag again", () => {
+    const s = run(joined(), local(move("n1", 50), 1), reject(1), local(move("n1", 60), 2), reject(2));
+    expect(s.bounced).toEqual({ ids: ["n1"], n: 2 });
+  });
+
+  it("any other reject doesn't bounce", () => {
+    const s = run(joined(), local(move("n1", 50), 1), reject(1, "node does not exist"));
+    expect(s.bounced).toBeNull();
+  });
+
+  it("the claim reason on something that isn't a move doesn't bounce either", () => {
+    const s = run(joined(), local(bpm(100), 1), reject(1));
+    expect(s.bounced).toBeNull();
+  });
+
+  it("a rejoin keeps the last bounce, so its tag isn't re-shown or cut short", () => {
+    const s = run(joined(), local(move("n1", 50), 1), reject(1));
+    const again = syncReducer(s, { type: "snapshot", doc: starterDoc(), clientId: ME });
+    expect(again.bounced).toBe(s.bounced);
   });
 });
