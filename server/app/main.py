@@ -7,8 +7,11 @@ from pydantic import ValidationError
 
 from app.apply_op import Rejected
 from app.protocol import (
-    ClientOpMessage,
+    ClaimMessage,
+    ClaimsMessage,
+    ClientMessage,
     RejectMessage,
+    ReleaseMessage,
     ServerOpMessage,
     SnapshotMessage,
 )
@@ -39,16 +42,27 @@ async def room_socket(ws: WebSocket, room_id: str) -> None:
     client_id = uuid4().hex
     # comes before snapshot because either op is already in snapshot or the client is registered and received it in broadcast
     room.clients[ws] = client_id
-    snapshot = SnapshotMessage(version=room.version, clientId=client_id, ops=room.ops)
+    snapshot = SnapshotMessage(
+        version=room.version, clientId=client_id, ops=room.ops, claims=room.claims
+    )
     try:
         await ws.send_text(snapshot.model_dump_json())
         while True:
             text = await ws.receive_text()
             try:
-                msg = ClientOpMessage.model_validate_json(text)
+                # a TypeAdapter uses validate_json (model_validate_json is only on BaseModel classes)
+                msg = ClientMessage.validate_json(text)
             except ValidationError:
                 continue
-            version = room.try_append(msg.op)
+            # claim / release --> update the map, tell everyone only if it changed
+            if isinstance(msg, ClaimMessage | ReleaseMessage):
+                act = room.claim if isinstance(msg, ClaimMessage) else room.release
+                if act(client_id, msg.nodeIds):
+                    claims = ClaimsMessage(claims=room.claims)
+                    await room.broadcast(claims.model_dump_json())
+                continue
+            # anything else is an op: client_id lets the room refuse moves on nodes someone else holds
+            version = room.try_append(msg.op, client_id)
             if isinstance(version, Rejected):
                 reject = RejectMessage(clientSeq=msg.clientSeq, reason=version.reason)
                 await ws.send_text(reject.model_dump_json())
@@ -61,3 +75,7 @@ async def room_socket(ws: WebSocket, room_id: str) -> None:
         pass
     finally:
         room.clients.pop(ws, None)
+        # a client that drops mid-drag must not leave its nodes locked for everyone else
+        if room.release_all(client_id):
+            claims = ClaimsMessage(claims=room.claims)
+            await room.broadcast(claims.model_dump_json())

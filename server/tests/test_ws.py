@@ -383,3 +383,154 @@ def test_move_with_a_deleted_node_moves_the_rest():
         doc = room_doc(room)
         assert "n1" not in doc["nodes"]
         assert doc["nodes"]["n2"]["position"] == {"x": 5, "y": 5}
+
+
+# DRAG CLAIMS
+# claim / release are live state only: broadcast as the whole map, never stored in the op log
+
+
+def claim(ws, node_ids: list[str]) -> None:
+    ws.send_json({"type": "claim", "nodeIds": node_ids})
+
+
+def release(ws, node_ids: list[str]) -> None:
+    ws.send_json({"type": "release", "nodeIds": node_ids})
+
+
+def sync(sender, *others) -> None:
+    # a cheap op everyone has to read: if a claims message had been broadcast before it,
+    # receive_json would return that instead, so this proves "nothing was sent"
+    sender.send_json(op_msg(100, 99))
+    for ws in (sender, *others):
+        assert ws.receive_json()["type"] == "op"
+
+
+@contextmanager
+def two_clients_with_ids():
+    # like two_clients but also yields each client's id --> (room, a, b, a_id, b_id)
+    room = new_room()
+    with (
+        client.websocket_connect(f"/ws/{room}") as a,
+        client.websocket_connect(f"/ws/{room}") as b,
+    ):
+        a_id = a.receive_json()["clientId"]
+        b_id = b.receive_json()["clientId"]
+        yield room, a, b, a_id, b_id
+
+
+# 21. a claim is broadcast to everyone, the claimer included, as the whole map
+def test_claim_is_broadcast_to_everyone():
+    with two_clients_with_ids() as (_, a, b, a_id, _):
+        claim(a, ["n1", "n2"])
+        for ws in (a, b):
+            assert ws.receive_json() == {
+                "type": "claims",
+                "claims": {"n1": a_id, "n2": a_id},
+            }
+
+
+# 22. first to start dragging wins: b's claim on a held node changes nothing, so nothing is sent
+def test_first_claim_wins():
+    with two_clients() as (_, a, b):
+        claim(a, ["n1"])
+        a.receive_json()
+        b.receive_json()
+        claim(b, ["n1"])
+        sync(b, a)  # no claims message got in ahead of the op
+
+
+# 23. a claim takes only the free nodes: b keeps n2 even though n1 was already a's
+def test_claim_takes_only_free_nodes():
+    with two_clients_with_ids() as (_, a, b, a_id, b_id):
+        claim(a, ["n1"])
+        a.receive_json()
+        b.receive_json()
+        claim(b, ["n1", "n2"])
+        assert b.receive_json()["claims"] == {"n1": a_id, "n2": b_id}
+
+
+# 24. a move on a node someone else holds is rejected; the holder's own move goes through
+def test_move_on_a_node_held_by_someone_else_is_rejected():
+    with two_clients() as (room, a, b):
+        claim(a, ["n1"])
+        a.receive_json()
+        b.receive_json()
+        assert send(b, move({"n1": {"x": 7, "y": 7}}), 1) == {
+            "type": "reject",
+            "clientSeq": 1,
+            "reason": "node is being moved by someone else",
+        }
+        assert send(a, move({"n1": {"x": 3, "y": 3}}), 1)["type"] == "op"
+        assert room_doc(room)["nodes"]["n1"]["position"] == {"x": 3, "y": 3}
+
+
+# 25. a held node only blocks MOVES: b can still edit its data
+def test_held_node_can_still_be_edited():
+    with two_clients() as (_, a, b):
+        claim(a, ["n3"])
+        a.receive_json()
+        b.receive_json()
+        assert send(b, update("n3", {"value": 500}), 1)["type"] == "op"
+
+
+# 26. after a release the node is free again: an empty map is broadcast and b can move it
+def test_release_frees_the_node():
+    with two_clients() as (_, a, b):
+        claim(a, ["n1"])
+        a.receive_json()
+        b.receive_json()
+        release(a, ["n1"])
+        for ws in (a, b):
+            assert ws.receive_json() == {"type": "claims", "claims": {}}
+        assert send(b, move({"n1": {"x": 7, "y": 7}}), 1)["type"] == "op"
+
+
+# 27. only the holder can release: b releasing a's node changes nothing
+def test_release_by_someone_else_does_nothing():
+    with two_clients() as (_, a, b):
+        claim(a, ["n1"])
+        a.receive_json()
+        b.receive_json()
+        release(b, ["n1"])
+        sync(b, a)
+        assert send(b, move({"n1": {"x": 7, "y": 7}}), 2)["type"] == "reject"
+
+
+# 28. a client that drops mid-drag releases everything it held
+def test_disconnect_releases_claims():
+    room = new_room()
+    with client.websocket_connect(f"/ws/{room}") as a:
+        a.receive_json()
+        with client.websocket_connect(f"/ws/{room}") as b:
+            b_id = b.receive_json()["clientId"]
+            claim(b, ["n1"])
+            assert a.receive_json()["claims"] == {"n1": b_id}
+        # b's block ended mid-drag
+        assert a.receive_json() == {"type": "claims", "claims": {}}
+        assert send(a, move({"n1": {"x": 7, "y": 7}}), 1)["type"] == "op"
+
+
+# 29. a late joiner's snapshot shows who is dragging what
+def test_snapshot_includes_claims():
+    room = new_room()
+    with client.websocket_connect(f"/ws/{room}") as a:
+        a_id = a.receive_json()["clientId"]
+        claim(a, ["n2"])
+        a.receive_json()
+        with client.websocket_connect(f"/ws/{room}") as c:
+            assert c.receive_json()["claims"] == {"n2": a_id}
+
+
+# 30. claims never touch the op log: the version doesn't move
+def test_claims_are_not_stored_as_ops():
+    room = new_room()
+    with client.websocket_connect(f"/ws/{room}") as a:
+        a.receive_json()
+        claim(a, ["n1"])
+        a.receive_json()
+        release(a, ["n1"])
+        a.receive_json()
+    with client.websocket_connect(f"/ws/{room}") as c:
+        snap = c.receive_json()
+        assert snap["version"] == len(STARTER)
+        assert snap["claims"] == {}
