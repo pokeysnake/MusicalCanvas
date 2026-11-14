@@ -6,6 +6,9 @@ import { getSound } from "./sounds";
 import { OUTPUT_ID } from "./doc";
 import { FILTERS, Q, type FilterKind } from "./filters";
 
+// one cycle = one bar of this many beats, so the BPM box sets cycles per minute as bpm / BEATS_PER_BAR
+export const BEATS_PER_BAR = 4;
+
 export type CompileIssue = { nodeId: string; message: string };
 export type CompileResult = { code: string; issues: CompileIssue[] };
 
@@ -158,7 +161,7 @@ export function compile(doc:Doc): CompileResult {
 
     const parts = inputExprs(OUTPUT_ID);
     const body = parts.length > 0 ? stackOf(parts) : "silence";
-    const code = [`setcpm(${doc.settings.bpm}/4)`, ...vars, body].join("\n");
+    const code = [`setcpm(${doc.settings.bpm}/${BEATS_PER_BAR})`, ...vars, body].join("\n");
     return { code, issues: [...issues].map(([nodeId, message]) => ({ nodeId, message })) };
 
 }

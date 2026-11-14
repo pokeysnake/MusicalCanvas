@@ -32,7 +32,7 @@ import NotesEditor, { type Rect } from "@/ui/NotesEditor";
 import ShareButton from "@/ui/ShareButton";
 import GooButton from "@/ui/GooButton";
 import { Play, Square } from "lucide-react";
-import { compile } from "@/model/compile";
+import { BEATS_PER_BAR, compile } from "@/model/compile";
 import { issueText } from "@/canvas/issues";
 import { useRoomSocket } from "@/sync/useRoomSocket";
 
@@ -60,6 +60,9 @@ function withSelection(set: ReadonlySet<string>, id: string, on: boolean): Reado
     return next;
 }
 
+
+// at most `digits` decimals, no trailing zeros: 30, 2.5, 1.33
+const round = (n: number, digits: number) => String(Number(n.toFixed(digits)));
 
 /* ---------- BPM limits ---------- */
 const BPM_MIN = 40;
@@ -341,6 +344,11 @@ function Editor({ roomId }: { roomId: string | null }) {
                             // Enter just blurs, so the op is sent from onBlur only (never twice)
                             onKeyDown={(e) => { if (e.key === "Enter") e.currentTarget.blur(); }} />
                     </label>
+                    {/* what the BPM means for Strudel: one cycle = one bar of BEATS_PER_BAR beats, so cpm = bpm / BEATS_PER_BAR */}
+                    <span className="tempo-info"
+                        title={`Strudel counts time in cycles. Here one cycle is one bar of ${BEATS_PER_BAR} beats, so cycles per minute (CPM) = BPM ÷ ${BEATS_PER_BAR}. Everything in a Notes node plays within one bar.`}>
+                        {BEATS_PER_BAR} beats/bar · {round(bpm / BEATS_PER_BAR, 2)} CPM · {round((60 * BEATS_PER_BAR) / bpm, 2)}s per bar
+                    </span>
                     {/* squishy buttons; Play gently breathes while the song plays */}
                     <GooButton onClick={onPlay} color="var(--accent)" ink="var(--accent-ink)" active={playing}>
                         <Play size={14} fill="currentColor" /> Play
