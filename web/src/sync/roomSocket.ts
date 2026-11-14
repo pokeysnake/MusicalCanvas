@@ -15,8 +15,8 @@ export type SocketLike = {
 export type SocketCtor = new (url: string) => SocketLike;
 
 export type Handlers = {
-  /** the room's doc plus the id the server gave this connection (to spot our own echoes) */
-  onSnapshot(doc: Doc, clientId: string): void;
+  /** the room's doc, the id the server gave this connection (to spot our own echoes), and the op-log version */
+  onSnapshot(doc: Doc, clientId: string, version: number): void;
   /** the whole message: the optimistic layer needs the sender's clientId and clientSeq */
   onOp(msg: ServerOpMessage): void;
   onReject(msg: RejectMessage): void;
@@ -45,7 +45,7 @@ export function connectRoom(
     if (typeof e.data !== "string") return;
     const msg = parseServerMessage(e.data);
     if (!msg) return;
-    if (msg.type === "snapshot") handlers.onSnapshot(docFromOps(msg.ops), msg.clientId);
+    if (msg.type === "snapshot") handlers.onSnapshot(docFromOps(msg.ops), msg.clientId, msg.version);
     else if (msg.type === "reject") handlers.onReject(msg);
     else handlers.onOp(msg);
   };
