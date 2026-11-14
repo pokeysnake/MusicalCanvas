@@ -18,3 +18,23 @@
   white-space: nowrap;
   backface-visibility: hidden;
 }
+
+/* solo: the "new room starts from" menu under Share (same paper/ink look as the FX rack's menu) */
+.share-menu {
+  min-width: 220px;
+  border-radius: 0;
+  border: var(--stroke) solid var(--ink);
+  background: var(--paper);
+  font-family: var(--font-sans);
+  box-shadow: 3px 3px 0 var(--tile-border);
+}
+.share-menu__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.share-menu__item { gap: 10px; cursor: pointer; border-radius: 0; }
+.share-menu__name { flex: 1; color: var(--text); }
+.share-menu__hint { font: 10px var(--font-mono); color: var(--muted); }

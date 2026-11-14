@@ -35,6 +35,7 @@ import { Square } from "lucide-react";
 import { BEATS_PER_BAR, compile } from "@/model/compile";
 import { issueText } from "@/canvas/issues";
 import { useRoomSocket } from "@/sync/useRoomSocket";
+import { createRoom, downloadSaveFile, readSaveFile, seedOps, type SeedChoice } from "@/sync/seed";
 
 
 /* ---------- Starting graph (what's on the canvas at page load) ---------- */
@@ -91,6 +92,36 @@ function Editor({ roomId }: { roomId: string | null }) {
     }, [roomId, send, act]);
     const router = useRouter();
     const [ui, setUi] = useState<UiState>(emptyUi);
+
+    /* ---------- Sharing, export and load (no database: users keep their own patch files) ---------- */
+    // why the last share / load failed (server asleep or unreachable, a bad file, a refused op)
+    const [fileError, setFileError] = useState<string | null>(null);
+    const [opening, setOpening] = useState(false); // a new room is being made (Render can take ~50 s to wake)
+    const fileInput = useRef<HTMLInputElement>(null);
+
+    // ask the server for a room seeded with these ops, then go there
+    const openRoom = useCallback(async (ops: Op[]) => {
+        setOpening(true);
+        setFileError(null);
+        try {
+            router.push(`/room/${await createRoom(ops)}`);
+        } catch (e) {
+            setFileError(`Share: ${e instanceof Error ? e.message : String(e)}`);
+            setOpening(false);
+        }
+    }, [router]);
+
+    const onShare = (choice: SeedChoice) => void openRoom(seedOps(choice, doc));
+
+    // a loaded file replaces the solo graph; in a room it opens as a NEW room (the current jam is left alone)
+    const onLoadFile = async (file: File) => {
+        const r = readSaveFile(await file.text());
+        if (!r.ok) return setFileError(`Load: ${r.reason}`);
+        setFileError(null);
+        if (roomId) return void openRoom(r.ops);
+        act({ type: "load", doc: r.doc, version: r.ops.length });
+        setUi((prev) => ({ ...emptyUi(), dims: prev.dims }));
+    };
 
     // reachability only depends on the doc, so drag frames skip the search
     const live = useMemo(
@@ -394,12 +425,13 @@ function Editor({ roomId }: { roomId: string | null }) {
                     </label>
                     {/* sharing: solo mode offers a new room; inside a room, show the connection and a copy-link button */}
                     {roomId && <span className="room-status" data-status={status}>{status}</span>}
-                    <ShareButton roomId={roomId} onShare={() => router.push(`/room/${crypto.randomUUID()}`)} />
+                    <ShareButton roomId={roomId} busy={opening} onShare={onShare} />
                     {/* three independent sources, so one can never hide another:
                         compile issues (the song still plays without those nodes), a rejected op, and playback */}
                     <div className="errors">
                         {issueLine && <span className="err" title={issueLine}>{issueLine}</span>}
                         {opError && <span className="err" title={opError}>{opError}</span>}
+                        {fileError && <span className="err" title={fileError}>{fileError}</span>}
                         {error && <span className="err" title={error}>Playback: {error}</span>}
                     </div>
                 </header>
@@ -456,6 +488,25 @@ function Editor({ roomId }: { roomId: string | null }) {
                     <div className="brand">Music Canvas</div>
                     <h4>Collaborators</h4>
                     <div className="who">you</div>
+
+                    {/* rooms aren't saved on the server: Export is how you keep a patch, Load brings it back */}
+                    <h4>Patch</h4>
+                    <div className="patch-actions">
+                        <button type="button" className="btn" onClick={() => downloadSaveFile(doc)}>Export</button>
+                        <button type="button" className="btn" disabled={opening}
+                            title={roomId ? "Open a patch file as a new room" : "Replace this graph with a patch file"}
+                            onClick={() => fileInput.current?.click()}>Load</button>
+                    </div>
+                    <input ref={fileInput} type="file" accept=".json,application/json" hidden
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            e.target.value = ""; // so picking the same file again still fires
+                            if (file) void onLoadFile(file);
+                        }} />
+                    <p className="patch-note">
+                        {roomId ? "Rooms aren't saved. Export to keep this patch; Load opens a file as a new room."
+                            : "Nothing is saved. Export to keep your patch, Load to bring it back."}
+                    </p>
 
                     <h4>Nodes</h4>
                     {PALETTE_NODES.map((item) => (

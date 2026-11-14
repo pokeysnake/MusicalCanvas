@@ -1,6 +1,7 @@
 import json
 from pathlib import Path
 from typing import Any
+from uuid import uuid4
 
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -35,9 +36,12 @@ STARTER_DOC = replay(STARTER)
 
 
 class Room:
-    def __init__(self) -> None:
-        self.ops: list[dict[str, Any]] = list(STARTER)
-        self.doc: dict = STARTER_DOC
+    def __init__(
+        self, ops: list[dict[str, Any]] | None = None, doc: dict | None = None
+    ) -> None:
+        # no ops given = a plain new room seeded with STARTER like how it normally is
+        self.ops: list[dict[str, Any]] = list(STARTER if ops is None else ops)
+        self.doc: dict = STARTER_DOC if doc is None else doc
         # maps each connected socket to its client id, how the room will know who to broadcast to and the sender id is how the echo gets tagged
         self.clients: dict[WebSocket, str] = {}
         # nodeId -> clientId of whoever is dragging it --> the live state only never stored in ops
@@ -107,3 +111,22 @@ def get_room(room_id: str) -> Room:
     if room is None:
         room = rooms[room_id] = Room()
     return room
+
+
+# a big patch is a few hundred ops --> hard caps to stop someone from sending a giant list
+MAX_SEED_OPS = 2000
+
+
+def create_room(ops: list[dict[str, Any]]) -> str | Rejected:
+    """a new room seeded with these ops instead of the starter --> every op must apply, or no room is made"""
+    if len(ops) > MAX_SEED_OPS:
+        return Rejected(f"too many ops (max {MAX_SEED_OPS})")
+    doc = empty_doc()
+    for op in ops:
+        result = apply_op(doc, op)
+        if isinstance(result, Rejected):
+            return result
+        doc = result.doc
+    room_id = uuid4().hex
+    rooms[room_id] = Room(ops, doc)
+    return room_id

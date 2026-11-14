@@ -41,7 +41,9 @@ export type SyncAction =
   /** a broadcast op from the server: anyone's, our own echo included */
   | { type: "remote"; msg: ServerOpMessage }
   /** the server rejected our op with this clientSeq */
-  | { type: "reject"; clientSeq: number; reason: string };
+  | { type: "reject"; clientSeq: number; reason: string }
+  /** solo only: a loaded save file replaces the whole doc. version = how many ops built it */
+  | { type: "load"; doc: Doc; version: number };
 
 export const initialSync = (doc: Doc): SyncState => ({
   confirmed: doc,
@@ -94,6 +96,9 @@ export function syncReducer(s: SyncState, a: SyncAction): SyncState {
       const pending = mine ? s.pending.filter((p) => p.seq !== a.msg.clientSeq) : s.pending;
       return { ...s, confirmed, pending, doc: rebase(confirmed, pending), version };
     }
+
+    case "load":
+      return { ...s, confirmed: a.doc, pending: [], doc: a.doc, error: null, version: a.version };
 
     case "reject": {
       const pending = s.pending.filter((p) => p.seq !== a.clientSeq);

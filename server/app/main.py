@@ -1,7 +1,7 @@
 import os
 from uuid import uuid4
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import ValidationError
 
@@ -12,10 +12,11 @@ from app.protocol import (
     ClientMessage,
     RejectMessage,
     ReleaseMessage,
+    SeedRequest,
     ServerOpMessage,
     SnapshotMessage,
 )
-from app.rooms import get_room
+from app.rooms import create_room, get_room
 
 app = FastAPI(title="Music Canvas Sync Server")
 
@@ -33,6 +34,15 @@ app.add_middleware(
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/api/rooms", status_code=201)
+def new_room(body: SeedRequest) -> dict[str, str]:
+    """make a room seeded with the sender's ops; the client then opens /room/{roomId}"""
+    result = create_room(body.ops)
+    if isinstance(result, Rejected):
+        raise HTTPException(status_code=422, detail=result.reason)
+    return {"roomId": result}
 
 
 @app.websocket("/ws/{room_id}")

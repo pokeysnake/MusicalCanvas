@@ -77,3 +77,9 @@ class ClaimsMessage(BaseModel):
 
     type: Literal["claims"] = "claims"
     claims: dict[str, str]  # nodeId -> clientId
+
+
+class SeedRequest(BaseModel):
+    """http POST /api/rooms body --> the ops a new room starts from [] = blank, the starter ops = the demo"""
+
+    ops: list[Op]

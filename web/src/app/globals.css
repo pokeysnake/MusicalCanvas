@@ -470,3 +470,8 @@ button, input { font: inherit; } /* form controls don't inherit fonts by default
 }
 /* my drop lost the race: same tooltip as the drag hint, in the alert colour */
 .drag-hint.is-bounced { color: var(--text); border-color: var(--accent); }
+
+/* ---------- Patch file: Export / Load in the sidebar ---------- */
+.side .patch-actions { display: flex; gap: 6px; }
+.side .patch-actions .btn { flex: 1; justify-content: center; }
+.side .patch-note { margin: 6px 0 0; font-size: 11px; line-height: 1.4; color: var(--muted); }

@@ -4,9 +4,9 @@ import { useCallback, useEffect, useRef, useState, type Dispatch } from "react";
 import type { Op } from "@/model/types";
 import type { SyncAction } from "./optimistic";
 import type { Claims } from "./protocol";
+import { WS_URL } from "./config";
 import { connectRoom, type RoomSocket, type Status } from "./roomSocket";
 
-const WS_URL = process.env.NEXT_PUBLIC_WS_URL ?? "ws://localhost:8000";
 
 /** dev only: /room/abc?lag=3000 holds this tab's outgoing ops 3 s, to stage races with one mouse */
 function devLagMs(): number {
